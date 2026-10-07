@@ -33,7 +33,7 @@ export class World {
     this.random = randomGenerator(352);
     this.timeUniform = { value: 0 };
     this.windUniform = { value: DEFAULT_WIND };
-    this.windField = { windNoise: { value: createWindNoise() }, windTime: { value: 0 }, windDirection: { value: new THREE.Vector2(Math.sin(Math.PI * 0.6), Math.cos(Math.PI * 0.6)) } };
+    this.windField = { windNoise: { value: createWindNoise() }, windOffset: { value: new THREE.Vector2() }, windDirection: { value: new THREE.Vector2(Math.sin(Math.PI * 0.6), Math.cos(Math.PI * 0.6)) } };
     this.rainUniform = { value: 0 };
     this.foliage = [];
     this.flags = [];
@@ -476,9 +476,12 @@ export class World {
     const visualHour = environment.visualHour ?? environment.hour;
     this.timeUniform.value = environment.elapsed;
     this.windUniform.value = environment.windStrength;
-    this.windField.windTime.value += dt * 0.12 * environment.windStrength;
     const windAngle = Math.PI * 0.6 + Math.sin(environment.elapsed * 0.033) * 0.25 + Math.sin(environment.elapsed * 0.077) * 0.09;
     this.windField.windDirection.value.set(Math.sin(windAngle), Math.cos(windAngle));
+    const windOffset = this.windField.windOffset.value;
+    windOffset.addScaledVector(this.windField.windDirection.value, dt * 0.12 * environment.windStrength);
+    // All four noise layers repeat after an offset of 100.
+    windOffset.x %= 100; windOffset.y %= 100;
     for (const flag of this.flags) flag.update(dt, environment.windStrength, this.windField.windDirection.value);
     this.groundDetails.update(dt, environment, vehicle);
     this.rainUniform.value = rain;

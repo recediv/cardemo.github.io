@@ -186,14 +186,17 @@ export class GroundDetails {
       while (this.terrain.isLand && !this.terrain.isLand(x, z, 0.2)) {
         x = (this.random() - 0.5) * (WORLD_SIZE.width - 6); z = (this.random() - 0.5) * (WORLD_SIZE.depth - 6);
       }
-      this.leaves.push({ position: new THREE.Vector3(x, this.groundHeight(x, z) + 0.018, z), velocity: new THREE.Vector3(), scale: 0.28 + this.random() * 0.24, yaw: this.random() * Math.PI * 2, phase: this.random() * Math.PI * 2, weight: 0.1 + this.random() * 0.1, tilt: (this.random() - 0.5) * 0.035, lastPush: -2, windAfter: this.random() * 3, cell: null });
+      const floor = this.groundHeight(x, z) + 0.018;
+      this.leaves.push({ position: new THREE.Vector3(x, floor, z), floor, velocity: new THREE.Vector3(), scale: 0.28 + this.random() * 0.24, yaw: this.random() * Math.PI * 2, phase: this.random() * Math.PI * 2, weight: 0.1 + this.random() * 0.1, tilt: (this.random() - 0.5) * 0.035, lastPush: -2, windAfter: this.random() * 3, cell: null });
       this.mesh.setColorAt(i, color.copy(colorA).lerp(colorB, this.random()));
       this.writeMatrix(i); this.putToRest(i);
     }
     scene.add(this.mesh);
   }
   writeMatrix(index) {
-    const leaf = this.leaves[index], air = this.active.has(index) ? Math.min(1.5, Math.max(0, leaf.position.y - 0.06) * 1.5) : 0;
+    const leaf = this.leaves[index];
+    const height = Math.max(0, leaf.position.y - leaf.floor);
+    const air = this.active.has(index) ? smoothstep(0, 0.75, height) * 0.7 : 0;
     this.dummy.position.copy(leaf.position); this.dummy.scale.set(leaf.scale * 0.75, leaf.scale, leaf.scale);
     this.dummy.rotation.set(leaf.tilt + Math.sin(this.elapsed * 5 + leaf.phase) * air, leaf.yaw, Math.cos(this.elapsed * 4.3 + leaf.phase) * air);
     this.dummy.updateMatrix(); this.mesh.setMatrixAt(index, this.dummy.matrix);
@@ -269,6 +272,7 @@ export class GroundDetails {
       velocity.y -= 9.807 * leaf.weight * dt; position.addScaledVector(velocity, dt);
       // Keep each leaf's actual position; clamping to a shared edge creates rows.
       const floor = this.groundHeight(position.x, position.z) + 0.018;
+      leaf.floor = floor;
       if (position.y <= floor) {
         position.y = floor; velocity.y = 0; velocity.x *= Math.exp(-7 * dt); velocity.z *= Math.exp(-7 * dt);
         if (Math.hypot(velocity.x, velocity.z) < 0.08) { velocity.set(0, 0, 0); this.active.delete(index); this.windActive.delete(index); this.putToRest(index); }

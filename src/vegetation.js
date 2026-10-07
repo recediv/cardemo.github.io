@@ -137,7 +137,7 @@ export function applyLeafCloud(material, view, kind = 'oak') {
       float leafPhase = leafData.w * 38.0 + dot(instanceMatrix[3].xz, vec2(0.21, 0.13));
       float leafMotion = sin(worldTime * ${frequency.toFixed(2)} + leafPhase) * worldWind * ${flutter.toFixed(2)};
       #ifdef USE_ALPHAMAP
-        float leafTwist = leafMotion + length(forestWindOffset(treeData.xy + leafData.xz, 1.0)) * 2.2;
+        float leafTwist = leafMotion * 0.35 + forestWindNoise(treeData.xy + leafData.xz) * worldWind * 0.28;
         float twistCos = cos(leafTwist), twistSin = sin(leafTwist);
         vAlphaMapUv = mat2(twistCos, -twistSin, twistSin, twistCos) * (vAlphaMapUv - 0.5) + 0.5;
       #endif`);
@@ -154,7 +154,7 @@ export function applyLeafCloud(material, view, kind = 'oak') {
       diffuseColor.a *= texture2D(alphaMap, vAlphaMapUv).r;
     #endif`);
   };
-  material.customProgramCacheKey = () => `${key}-reference-leaf-cloud-v5-${kind}`;
+  material.customProgramCacheKey = () => `${key}-reference-leaf-cloud-v6-${kind}`;
   return material;
 }
 
@@ -225,7 +225,13 @@ export function applyMeadow(material, uniforms) {
 export function applyWind(material, kind, timeUniform, windUniform, field = null) {
   const previous = material.onBeforeCompile, previousKey = material.customProgramCacheKey();
   const grass = kind === 'grass';
-  field ??= { windNoise: { value: createWindNoise() }, windTime: timeUniform, windDirection: { value: new THREE.Vector2(0.951, -0.309) } };
+  if (!field) {
+    const direction = new THREE.Vector2(0.951, -0.309), offset = new THREE.Vector2();
+    field = {
+      windNoise: { value: createWindNoise() }, windDirection: { value: direction },
+      windOffset: { get value() { return offset.copy(direction).multiplyScalar(timeUniform.value * 0.12); } },
+    };
+  }
   const modify = shader => {
     previous(shader);
     Object.assign(shader.uniforms, field);
@@ -244,7 +250,7 @@ export function applyWind(material, kind, timeUniform, windUniform, field = null
     ` : 'attribute vec4 treeData;\n') + shader.vertexShader;
     const displacement = grass ? 'transformed.xz += forestBend() * plantWeight * transformed.y * 0.9;' : `
       vec3 treeWorldPosition = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
-      float treeBendWeight = pow(clamp(treeWorldPosition.y / max(treeData.z, 0.01), 0.0, 1.2), 2.0);
+      float treeBendWeight = pow(clamp(treeWorldPosition.y / max(treeData.z, 0.01), 0.0, 1.0), 2.0);
       vec2 treeWorldBend = forestTreeOffset(treeData.xy, treeData.w) * treeBendWeight;
       vec3 treeWorldOffset = vec3(treeWorldBend.x, 0.0, treeWorldBend.y);
       transformed += vec3(dot(instanceMatrix[0].xyz, treeWorldOffset) / dot(instanceMatrix[0].xyz, instanceMatrix[0].xyz),
@@ -252,14 +258,14 @@ export function applyWind(material, kind, timeUniform, windUniform, field = null
                           dot(instanceMatrix[2].xyz, treeWorldOffset) / dot(instanceMatrix[2].xyz, instanceMatrix[2].xyz));`;
     shader.vertexShader = shader.vertexShader.replace('#include <project_vertex>', `${displacement}\n#include <project_vertex>`);
   };
-  material.onBeforeCompile = modify; material.customProgramCacheKey = () => `${previousKey}-forest-wind-v8-${kind}`;
+  material.onBeforeCompile = modify; material.customProgramCacheKey = () => `${previousKey}-forest-wind-v9-${kind}`;
   const depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, side: material.side, alphaMap: material.alphaMap, alphaTest: material.alphaTest });
   depth.onBeforeCompile = shader => {
     const fragment = shader.fragmentShader;
     modify(shader); shader.fragmentShader = fragment;
     material.userData.plantDepthFragment?.(shader);
   };
-  depth.customProgramCacheKey = () => `${previousKey}-forest-depth-v8-${kind}`;
+  depth.customProgramCacheKey = () => `${previousKey}-forest-depth-v9-${kind}`;
   return depth;
 }
 

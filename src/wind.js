@@ -19,11 +19,11 @@ export function createWindNoise() {
 }
 
 export const windShader = `
-  uniform float worldTime; uniform float worldWind; uniform float windTime;
-  uniform sampler2D windNoise; uniform vec2 windDirection;
+  uniform float worldTime; uniform float worldWind;
+  uniform sampler2D windNoise; uniform vec2 windDirection; uniform vec2 windOffset;
   float forestWindNoise(vec2 root) {
-    float first = texture2D(windNoise, root * 0.025 + windDirection * windTime).r - 0.5;
-    float second = texture2D(windNoise, root * 0.014 + windDirection * windTime * 0.2 + 0.37).r - 0.5;
+    float first = texture2D(windNoise, root * 0.025 + windOffset).r - 0.5;
+    float second = texture2D(windNoise, root * 0.014 + windOffset * 0.2 + 0.37).r - 0.5;
     return first + second;
   }
   vec2 forestWindOffset(vec2 root, float response) {
@@ -33,12 +33,13 @@ export const windShader = `
     return (windDirection * (0.45 + field * 1.9 + gust) + vec2(-windDirection.y, windDirection.x) * crosswind) * worldWind * response;
   }
   vec2 forestTreeOffset(vec2 root, float response) {
-    float first = texture2D(windNoise, root * 0.018 + windDirection * windTime * 0.38).r - 0.5;
-    float second = texture2D(windNoise, root * 0.009 + windDirection * windTime * 0.09 + 0.23).r - 0.5;
+    float first = texture2D(windNoise, root * 0.018 + windOffset * 0.38).r - 0.5;
+    float second = texture2D(windNoise, root * 0.009 + windOffset * 0.09 + 0.23).r - 0.5;
     float field = first * 0.65 + second * 0.35;
     float gust = sin(worldTime * 0.58 + root.x * 0.06 + root.y * 0.045) * 0.48
       + sin(worldTime * 0.27 + root.x * 0.13) * 0.18;
     float side = sin(worldTime * 0.45 + root.x * 0.04 - root.y * 0.035) * 0.24;
-    return (windDirection * (0.3 + field * 0.9 + gust) + vec2(-windDirection.y, windDirection.x) * side) * worldWind * response;
+    vec2 bend = (windDirection * (0.3 + field * 0.9 + gust) + vec2(-windDirection.y, windDirection.x) * side) * worldWind * response;
+    return bend / (1.0 + length(bend) * 0.8);
   }
 `;
