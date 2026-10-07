@@ -160,7 +160,8 @@ export class GroundDetails {
     this.mesh = new THREE.InstancedMesh(geometry, material, count); this.mesh.name = 'loose-ground-leaves';
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.mesh.castShadow = this.mesh.receiveShadow = true; this.mesh.frustumCulled = false;
-    const colorA = new THREE.Color('#95513a'), colorB = new THREE.Color('#f56a3a'), color = new THREE.Color();
+    const colors = ['#95513a', '#cc663b', '#f56a3a', '#caa535', '#e6c33d', '#f0d66a'].map(value => new THREE.Color(value));
+    const color = new THREE.Color();
     const broadTrees = trees.filter(t => t.kind !== 'pine');
     const roadPatches = Array.from({ length: 20 }, () => ({
       center: this.track.point(this.random(), (this.random() - 0.5) * this.track.width * 0.8).position,
@@ -188,7 +189,8 @@ export class GroundDetails {
       }
       const floor = this.groundHeight(x, z) + 0.018;
       this.leaves.push({ position: new THREE.Vector3(x, floor, z), floor, velocity: new THREE.Vector3(), scale: 0.28 + this.random() * 0.24, yaw: this.random() * Math.PI * 2, phase: this.random() * Math.PI * 2, weight: 0.1 + this.random() * 0.1, tilt: (this.random() - 0.5) * 0.035, lastPush: -2, windAfter: this.random() * 3, cell: null });
-      this.mesh.setColorAt(i, color.copy(colorA).lerp(colorB, this.random()));
+      const shade = this.random() * colors.length;
+      this.mesh.setColorAt(i, color.copy(colors[Math.floor(shade)]).multiplyScalar(0.92 + (shade % 1) * 0.16));
       this.writeMatrix(i); this.putToRest(i);
     }
     scene.add(this.mesh);
