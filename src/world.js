@@ -434,11 +434,13 @@ export class World {
     this.waterMaterial = this.material('#749caa', { roughness: 0.08, metalness: 0.65, transparent: true, opacity: 0, depthWrite: false });
     const puddleCount = 8;
     for (let i = 0; i < puddleCount; i++) {
-      const p = this.track.point((0.05 + i / puddleCount + this.random() * 0.025) % 1, (this.random() - 0.5) * 4);
+      const progress = (0.05 + i / puddleCount + this.random() * 0.025) % 1, lane = (this.random() - 0.5) * 4;
+      const size = { x: 1.2 + this.random() * 1.8, z: 0.6 + this.random() };
+      let p = this.track.point(progress, lane);
+      if (this.ramps.some(ramp => ramp.coversPoint(p.position, Math.hypot(size.x, size.z) * 1.21))) p = this.track.point(progress + 24 / this.track.curve.getLength(), lane);
       const mesh = new THREE.Mesh(geometry, this.waterMaterial);
       mesh.rotation.set(-Math.PI / 2, 0, p.yaw);
       mesh.position.set(p.position.x, this.track.height + 0.014, p.position.z);
-      const size = { x: 1.2 + this.random() * 1.8, z: 0.6 + this.random() };
       this.puddles.push({ mesh, size, yaw: p.yaw });
       this.scene.add(mesh);
     }
