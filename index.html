@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#243a32">
+  <meta name="description" content="Racing through an autumn forest.">
+  <title>Forest Track</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23243a32'/%3E%3Cpath d='M12 40h40L46 24H20z' fill='%23eaa36f'/%3E%3Ccircle cx='20' cy='43' r='6' fill='%23f4edcc'/%3E%3Ccircle cx='44' cy='43' r='6' fill='%23f4edcc'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./src/style.css">
+</head>
+<body>
+  <canvas id="scene" aria-label="Forest race track"></canvas>
+  <div class="toolbar">
+    <button id="camera-button" class="icon-button" title="Camera · C" aria-label="Switch camera">◉</button>
+    <button id="sound-button" class="icon-button" title="Sound · M" aria-label="Enable sound" aria-pressed="false">♪</button>
+    <button id="settings-button" class="icon-button" title="Settings" aria-label="Settings" aria-expanded="false">☷</button>
+  </div>
+  <section id="settings" class="settings panel" hidden aria-label="Settings">
+    <div class="section-heading"><h2>Settings</h2></div>
+    <label for="hour">Time of day <output id="hour-output">14:00</output></label>
+    <input id="hour" type="range" min="0" max="23.9" step="0.1" value="14">
+    <div class="preset-times"><button data-hour="7">Morning</button><button data-hour="14">Day</button><button data-hour="18.5">Evening</button><button data-hour="0">Night</button></div>
+    <label class="row" for="rain-toggle">Rain <input id="rain-toggle" type="checkbox"></label>
+    <label for="volume">Volume</label><input id="volume" type="range" min="0" max="1" step="0.05" value="0.45">
+    <label for="quality">Quality</label><select id="quality"><option value="high">Standard</option><option value="low">Low</option></select>
+    <div class="settings-actions"><button id="reset-button">Reset · R</button><button id="flip-button">Flip · F</button></div>
+    <p class="small-note">If the car flips and stops, it returns to its wheels after 3 seconds.</p>
+  </section>
+  <aside class="map-panel panel" aria-label="Track map">
+    <div class="map-heading"><span>TRACK MAP</span><span id="surface-label">ASPHALT</span></div>
+    <canvas id="minimap" width="340" height="220"></canvas>
+    <div class="lap-row"><span>Lap <b id="lap">01</b></span><strong id="lap-time">00:00.0</strong></div>
+    <div class="best-row"><span>Best time</span><span id="best-time">—</span></div>
+  </aside>
+  <aside class="speed-panel panel" aria-label="Speed">
+    <div><strong id="speed">0</strong><span>KM/H</span></div>
+    <div class="speed-meter"><span id="speed-meter"></span></div>
+  </aside>
+  <aside id="performance" class="performance panel" aria-label="Performance" title="CPU and GPU show time spent on each frame. GPU timing is not supported in all browsers.">
+    <span>FPS <b data-metric="fps">—</b></span><span>FRAME <b data-metric="frame">—</b></span><span>CPU <b data-metric="cpu">—</b></span><span>GPU <b data-metric="gpu">—</b></span>
+  </aside>
+  <footer class="controls panel"><span><kbd>W A S D</kbd> / arrows — drive</span><span><kbd>Space</kbd> brake</span><span><kbd>Shift</kbd> boost</span><span><kbd>E</kbd> horn</span><span><kbd>R</kbd> reset</span><span><kbd>C</kbd> camera</span></footer>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div id="recovery" class="recovery" hidden></div>
+  <div class="touch-controls" aria-label="Touch controls">
+    <div><button data-drive="left" aria-label="Steer left">←</button><button data-drive="right" aria-label="Steer right">→</button></div>
+    <div><button data-drive="backward" aria-label="Reverse">↓</button><button data-drive="brake" aria-label="Brake">■</button><button data-drive="forward" aria-label="Accelerate">↑</button></div>
+  </div>
+  <div id="loading" class="loading">
+    <div class="loading-card">
+      <div id="loading-spinner" class="loading-spinner" aria-hidden="true"></div>
+      <p id="loading-message" class="visually-hidden" role="status">Loading…</p>
+      <div id="start-actions" hidden><button id="start-sound" class="primary-button">Start with sound</button><button id="start-quiet" class="quiet-button">Start without sound</button></div>
+    </div>
+  </div>
+  <script src="./vendor/ammo.wasm.js"></script>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

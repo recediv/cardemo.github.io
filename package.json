@@ -1,0 +1,19 @@
+{
+  "name": "forest-track-demo",
+  "description": "Racing through an autumn forest.",
+  "version": "1.0.0",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/recediv/cardemo.github.io.git"
+  },
+  "homepage": "https://recediv.github.io/cardemo.github.io/",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/server.mjs",
+    "build": "node scripts/build.mjs",
+    "preview": "node scripts/server.mjs --dist",
+    "test": "node tests/run.mjs"
+  },
+  "engines": { "node": ">=20" }
+}

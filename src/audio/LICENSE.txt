@@ -1,0 +1,15 @@
+crickets-night.mp3
+
+Title: Ambiance_Nature_Night_Cricket_Calm_Loop_Stereo.wav
+Author: Nox_Sound
+Source: https://freesound.org/people/Nox_Sound/sounds/637083/
+License: CC0 1.0 Universal (public domain dedication)
+License URL: https://creativecommons.org/publicdomain/zero/1.0/
+
+tires-squeak.mp3
+
+Title: Tires Squeaking.aif
+Author: RutgerMuller
+Source: https://freesound.org/people/RutgerMuller/sounds/104026/
+License: CC0 1.0 Universal (public domain dedication)
+License URL: https://creativecommons.org/publicdomain/zero/1.0/
