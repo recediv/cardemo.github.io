@@ -12,6 +12,8 @@ import './app.test.mjs';
 import './visuals.test.mjs';
 import './ground-details.test.mjs';
 import './car-effects.test.mjs';
+import './car-body.test.mjs';
+import './car-lighting.test.mjs';
 import './ghost.test.mjs';
 
 const Ammo = await loadAmmo();

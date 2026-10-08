@@ -80,18 +80,20 @@ function createAssets() {
   add('drivetrain', new THREE.SphereGeometry(0.1, 12, 8).scale(1.6, 0.78, 1).translate(0, -0.132, -1.04));
 
   for (const z of [1, -1.04]) {
-    const y = z > 0 ? -0.12 : -0.14;
-    pipe('drivetrain', [-0.61, y, z], [0.61, y, z], 0.019);
+    const y = z > 0 ? -0.11 : -0.135;
+    box('frame', [1.05, 0.045, 0.075], [0, y, z]);
+    if (z > 0) add('drivetrain', new THREE.SphereGeometry(0.066, 10, 6).scale(1.9, 0.8, 1).translate(0, -0.12, z));
     for (const side of [-1, 1]) {
-      for (const offset of [-0.16, 0.16]) {
-        pipe('frame', [side * 0.3, y + 0.025, z + offset], [side * 0.62, y, z], 0.015);
+      if (z > 0) pipe('frame', [side * 0.425, -0.12, 0.79], [side * 0.425, -0.075, 1.15], 0.025);
+      for (const offset of [-0.14, 0.14]) {
+        const pivotY = z > 0 ? -0.105 : -0.135;
+        box('frame', [0.064, 0.045, 0.055], [side * 0.425, pivotY, z + offset]);
+        pipe('frame', [side * 0.425, pivotY, z + offset], [side * 0.425, pivotY + 0.082, z + offset], 0.012);
+        box('frame', [0.052, 0.023, 0.045], [side * 0.425, pivotY + 0.082, z + offset]);
       }
-      pipe('drivetrain', [side * 0.51, y - 0.005, z], [side * 0.48, y + 0.095, z], 0.011);
-      const coil = Array.from({ length: 41 }, (_, i) => {
-        const t = i / 40, angle = t * Math.PI * 10;
-        return new THREE.Vector3(side * 0.5 + Math.cos(angle) * 0.028, y + 0.012 + t * 0.07, z + Math.sin(angle) * 0.028);
-      });
-      add('drivetrain', new THREE.TubeGeometry(new THREE.CatmullRomCurve3(coil), 40, 0.005, 4, false));
+      const top = z > 0 ? 0.075 : 0.105;
+      pipe('frame', [side * 0.425, y, z], [side * 0.56, top - 0.02, z], 0.024);
+      box('frame', [0.10, 0.026, 0.10], [side * 0.56, top, z]);
     }
   }
 

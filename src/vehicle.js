@@ -4,6 +4,7 @@ import { createRacingCar, RACING_COLLIDERS } from './car-model.js';
 import { HeadlightSystem } from './headlights.js';
 import { applyCarLighting } from './car-lighting.js';
 import { createRacingWheel } from './wheels.js';
+import { WheelSuspension } from './suspension.js';
 import { WORLD_SIZE } from './scene-config.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -21,6 +22,7 @@ export class Vehicle {
     this.speed = 0;
     this.throttle = 0;
     this.brakeForce = 0;
+    this.braking = false;
     this.inContactCount = 0;
     this.centerOfMassOffset = CENTER_OF_MASS_OFFSET;
     this.colliderParts = VEHICLE_COLLIDERS.map(part => ({ ...part, position: new THREE.Vector3(...part.position).addScaledVector(UP, CENTER_OF_MASS_OFFSET) }));
@@ -33,9 +35,6 @@ export class Vehicle {
     this.airTime = 0;
     this.lastSafe = { position: track.spawn.position.clone().setY(1.1), quaternion: new THREE.Quaternion().setFromAxisAngle(UP, track.spawn.yaw) };
     this.mesh = this.createMesh();
-    // Lower the physical centre of mass while keeping the body and its colliders
-    // in the same coordinates. Bruno's chassis also separates mass and bumpers.
-    for (const child of this.mesh.children) child.position.y += CENTER_OF_MASS_OFFSET;
     scene.add(this.mesh);
     this.headlightSystem = new HeadlightSystem(scene, this.mesh);
     this.headlights = this.headlightSystem.lights;
@@ -92,13 +91,18 @@ export class Vehicle {
     A.destroy(direction);
     A.destroy(axle);
     this.updateWheels();
-    for (const wheel of this.wheels) { wheel.previousPosition.copy(wheel.position); wheel.previousQuaternion.copy(wheel.quaternion); }
+    for (const wheel of this.wheels) {
+      wheel.previousPosition.copy(wheel.position); wheel.previousQuaternion.copy(wheel.quaternion);
+      wheel.mesh.position.copy(wheel.position); wheel.mesh.quaternion.copy(wheel.quaternion);
+    }
+    this.suspension = new WheelSuspension(this); this.suspension.update();
   }
   createMesh() {
-    const root = createRacingCar();
+    const root = createRacingCar(CENTER_OF_MASS_OFFSET);
     this.lampMaterial = root.userData.lampMaterial;
+    this.popupLampMaterial = root.userData.popupLampMaterial;
     this.tailMaterial = root.userData.tailMaterial;
-    this.headlights = [];
+    this.reverseLampMaterial = root.userData.reverseLampMaterial;
     return root;
   }
   createWheel() {
@@ -133,7 +137,7 @@ export class Vehicle {
     const grounded = this.inContactCount > 0;
     this.body.setDamping(grounded ? this.surface.onRoad ? 0.045 : 0.12 : 0.015, 0.18);
     this.stabilizeJump(dt);
-    this.tailMaterial.emissiveIntensity = input.brake || reversing ? 2.5 : 0.3;
+    this.braking = Boolean(input.brake || requestedThrottle * forwardSpeed < -0.15);
   }
   postStep(dt) {
     this.updateWheels();
@@ -187,8 +191,13 @@ export class Vehicle {
       wheel.mesh.position.lerpVectors(wheel.previousPosition, wheel.position, alpha);
       wheel.mesh.quaternion.slerpQuaternions(wheel.previousQuaternion, wheel.quaternion, alpha);
     }
+    this.suspension.update();
     this.headlightSystem.update(environment);
-    applyCarLighting(this.mesh.userData, this.headlightSystem);
+    this.mesh.userData.glassMaterial.userData.daylight.value = environment.daylight;
+    const velocity = this.body.getLinearVelocity();
+    this.forward.set(0, 0, 1).applyQuaternion(this.mesh.quaternion);
+    const forwardSpeed = velocity.x() * this.forward.x + velocity.y() * this.forward.y + velocity.z() * this.forward.z;
+    applyCarLighting(this.mesh.userData, this.headlightSystem, this.braking, forwardSpeed);
   }
   recover(offTrack = false) {
     let position, quaternion;
@@ -216,6 +225,7 @@ export class Vehicle {
     this.steer = 0;
     this.throttle = 0;
     this.brakeForce = 0;
+    this.braking = false;
     this.notify('Back at the start');
   }
   flip() {

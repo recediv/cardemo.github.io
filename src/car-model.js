@@ -2,6 +2,8 @@ import * as THREE from '../vendor/three.module.js';
 import { createUnderglowStrips } from './underglow.js';
 import { createBodyShellGeometry, createUnderbodyMechanism, EXHAUST_TIP } from './underbody.js';
 import { FRONT_OPENINGS, createCarFront } from './car-front.js';
+import { createCarExterior } from './car-body.js';
+import { createCarGlass, createWindowFrames, createCabinFrameGeometry, createCabinGlassGeometry } from './car-glass.js';
 
 export const POPUP_OPEN_ANGLE = -0.95;
 const POPUP_HEADLIGHT = { x: 0.415, z: 1.115, width: 0.35, length: 0.37, seam: 0.006 };
@@ -93,7 +95,7 @@ export function createRacingCar(centerOfMassOffset = 0, { simplified = false } =
   const stripePaint = white.clone();
   stripePaint.polygonOffset = true; stripePaint.polygonOffsetFactor = -1; stripePaint.polygonOffsetUnits = -1;
   const trim = new THREE.MeshStandardMaterial({ color: '#182127', roughness: 0.62, metalness: 0.1 });
-  const glass = new THREE.MeshStandardMaterial({ color: '#243944', roughness: 0.12, metalness: 0.45 });
+  const glass = createCarGlass(simplified);
   const mesh = (geometry, material, name) => {
     const item = new THREE.Mesh(geometry, material); item.name = name;
     item.castShadow = item.receiveShadow = true; root.add(item); return item;
@@ -101,21 +103,18 @@ export function createRacingCar(centerOfMassOffset = 0, { simplified = false } =
   const box = (size, position, material, name) => {
     const item = mesh(new THREE.BoxGeometry(...size), material, name); item.position.set(...position); return item;
   };
-  const beam = (start, end, width, material) => {
-    const a = new THREE.Vector3(...start), b = new THREE.Vector3(...end), direction = b.clone().sub(a);
-    const item = box([width, direction.length(), width], a.add(b).multiplyScalar(0.5).toArray(), material, 'window-pillar');
-    item.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
-  };
   mesh(simplified ? loft(bodyRings) : createBodyShellGeometry(bodyRings, FRONT_OPENINGS), simplified ? paint : [paint, trim], 'tapered-body');
-  mesh(loft(cabinRings), glass, 'sloping-windows');
+  mesh(createCabinGlassGeometry(cabinRings), glass, 'sloping-windows');
+  if (!simplified) {
+    mesh(createCabinFrameGeometry(cabinRings), paint, 'cabin-frame');
+    mesh(createWindowFrames(cabinRings), trim, 'window-gaskets').castShadow = false;
+  }
   box([1.13, 0.045, 0.83], [0, 0.735, -0.27], paint, 'low-roof').rotation.x = 0.026;
   box([1.78, 0.075, 0.28], [0, 0.65, -1.35], trim, 'rear-wing');
   for (const side of [-1, 1]) {
     if (!simplified) {
       box([0.075, 0.29, 0.075], [side * 0.53, 0.48, -1.35], trim, 'wing-support');
       box([0.055, 0.13, 0.32], [side * 0.87, 0.685, -1.35], paint, 'wing-endplate');
-      beam([side * 0.64, 0.3, 0.59], [side * 0.54, 0.72, 0.1], 0.052, paint);
-      beam([side * 0.66, 0.31, -1.0], [side * 0.54, 0.73, -0.63], 0.055, paint);
     }
     // Fixed stripes stop at the moving headlight covers.
     const vertices = [];
@@ -141,15 +140,20 @@ export function createRacingCar(centerOfMassOffset = 0, { simplified = false } =
     box([0.17, 0.006, 0.8], [side * 0.22, 0.764, -0.27], simplified ? stripePaint : white, 'roof-stripe').rotation.x = 0.026;
     if (!simplified) {
       const vent = box([0.13, 0.009, 0.29], [side * 0.49, bodyTop(0.87) + 0.004, 0.87], trim, 'bonnet-vent'); vent.rotation.x = 0.14;
-      box([0.075, 0.105, 0.26], [side * 0.805, 0.14, -0.5], trim, 'side-air-intake');
     }
   }
   box([1.05, 0.09, 0.05], [0, -0.035, -1.61], trim, 'rear-diffuser');
   const lamps = simplified ? stripePaint : new THREE.MeshStandardMaterial({ color: '#edf0eb', emissive: '#fffaf2', emissiveIntensity: 0 });
   const popupLamps = simplified ? null : new THREE.MeshStandardMaterial({ color: '#e8edf1', emissive: '#fff4e5', emissiveIntensity: 0, roughness: 0.18, metalness: 0.12 });
-  const tails = simplified ? paint : new THREE.MeshStandardMaterial({ color: '#d0242c', emissive: '#ff2024', emissiveIntensity: 0.3 });
+  const tails = simplified ? paint : new THREE.MeshStandardMaterial({ color: '#d0242c', emissive: '#ff0808', emissiveIntensity: 0 });
+  const reverseLamps = simplified ? null : new THREE.MeshStandardMaterial({ color: '#cbd0d1', emissive: '#ffffff', emissiveIntensity: 0, roughness: 0.25 });
   const exhaustMetal = simplified ? null : new THREE.MeshStandardMaterial({ color: '#9ca4aa', roughness: 0.3, metalness: 0.65 });
   const exhaustInside = simplified ? null : new THREE.MeshStandardMaterial({ color: '#090c0e', roughness: 1, side: THREE.DoubleSide });
+  const exteriorMaterials = { paint, trim, metal: exhaustMetal };
+  for (const part of createCarExterior(bodySections, cabinRings, simplified)) {
+    const item = mesh(part.geometry, exteriorMaterials[part.material], part.name);
+    item.castShadow = false;
+  }
   const exhaustOutlets = [];
   if (simplified) {
     box([1.16, 0.06, 0.064], [0, -0.005, 1.606], paint, 'front-bumper');
@@ -158,6 +162,10 @@ export function createRacingCar(centerOfMassOffset = 0, { simplified = false } =
   } else root.add(createCarFront(paint, trim, lamps, 'front-marker'));
   for (const side of [-1, 1]) {
     box([0.37, 0.055, 0.035], [side * 0.5, 0.15, -1.614], tails, 'rear-lamp');
+    if (!simplified) {
+      box([0.108, 0.072, 0.035], [side * 0.255, 0.15, -1.615], trim, 'reverse-lamp-frame');
+      box([0.084, 0.05, 0.038], [side * 0.255, 0.15, -1.62], reverseLamps, 'reverse-lamp');
+    }
 
     const popupX = side * POPUP_HEADLIGHT.x, popupZ = POPUP_HEADLIGHT.z, hingeY = bodyTop(popupZ) + 0.01;
     const coverGeometry = (halfWidth, offset, thickness) => {
@@ -218,6 +226,8 @@ export function createRacingCar(centerOfMassOffset = 0, { simplified = false } =
     }
   }
   root.userData.lampMaterial = lamps; root.userData.popupLampMaterial = popupLamps; root.userData.tailMaterial = tails;
+  root.userData.reverseLampMaterial = reverseLamps;
+  root.userData.glassMaterial = glass;
   root.userData.exhaustOutlets = exhaustOutlets;
   if (!simplified) {
     root.add(createUnderbodyMechanism());
