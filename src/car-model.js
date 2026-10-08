@@ -1,5 +1,6 @@
 import * as THREE from '../vendor/three.module.js';
 import { createUnderglowStrips } from './underglow.js';
+import { createBodyShellGeometry, createUnderbodyMechanism } from './underbody.js';
 
 // The visible surfaces and the physical hulls share these vertices.
 const bodySections = [
@@ -78,7 +79,7 @@ export function createRacingCar() {
     const item = box([width, direction.length(), width], a.add(b).multiplyScalar(0.5).toArray(), material, 'window-pillar');
     item.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
   };
-  mesh(loft(bodyRings), paint, 'tapered-body');
+  mesh(createBodyShellGeometry(bodyRings), [paint, trim], 'tapered-body');
   mesh(loft(cabinRings), glass, 'sloping-windows');
   box([1.13, 0.045, 0.83], [0, 0.735, -0.27], paint, 'low-roof').rotation.x = 0.026;
   box([1.78, 0.075, 0.28], [0, 0.65, -1.35], trim, 'rear-wing');
@@ -117,7 +118,8 @@ export function createRacingCar() {
     decal.castShadow = false;
   }
   root.userData.lampMaterial = lamps; root.userData.tailMaterial = tails;
-  const underglow = createUnderglowStrips(); root.add(underglow);
+  root.add(createUnderbodyMechanism());
+  const underglow = createUnderglowStrips(bodySections); root.add(underglow);
   root.userData.underglowMaterial = underglow.material; root.userData.underglowMesh = underglow;
   return root;
 }

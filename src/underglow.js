@@ -2,15 +2,29 @@ import * as THREE from '../vendor/three.module.js';
 
 const NEON_COLOR = '#54d9ef';
 
-export function createUnderglowStrips() {
-  const positions = [];
-  const add = (size, offset) => {
-    const box = new THREE.BoxGeometry(...size).toNonIndexed();
-    box.translate(...offset); positions.push(...box.attributes.position.array); box.dispose();
-  };
-  for (const side of [-1, 1]) add([0.035, 0.024, 2.6], [side * 0.65, -0.245, -0.05]);
-  for (const end of [-1, 1]) add([1.25, 0.024, 0.035], [0, -0.245, end * 1.33 - 0.05]);
+export function createUnderglowStrips(bodySections) {
+  const positions = [], indices = [], start = -1.35, end = 1.3;
+  const stations = [start, ...bodySections.map(section => section[0]).filter(z => z > start && z < end), end];
+  for (const side of [-1, 1]) {
+    const first = positions.length / 3;
+    for (const z of stations) {
+      const next = bodySections.findIndex(section => section[0] >= z);
+      const a = bodySections[next - 1], b = bodySections[next], t = (z - a[0]) / (b[0] - a[0]);
+      const x = side * (THREE.MathUtils.lerp(a[1], b[1], t) - 0.139);
+      const y = THREE.MathUtils.lerp(a[2], b[2], t) + 0.017;
+      positions.push(x - 0.016, y - 0.004, z, x + 0.016, y - 0.004, z,
+        x + 0.016, y + 0.004, z, x - 0.016, y + 0.004, z);
+    }
+    for (let i = 0; i < stations.length - 1; i++) for (let edge = 0; edge < 4; edge++) {
+      const a = first + i * 4 + edge, b = first + i * 4 + (edge + 1) % 4;
+      indices.push(a, b, a + 4, b, b + 4, a + 4);
+    }
+    indices.push(first, first + 2, first + 1, first, first + 3, first + 2);
+    const last = first + (stations.length - 1) * 4;
+    indices.push(last, last + 1, last + 2, last, last + 2, last + 3);
+  }
   const geometry = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setIndex(indices); geometry.computeBoundingSphere();
   const material = new THREE.MeshBasicMaterial({ color: NEON_COLOR, transparent: true, opacity: 0.85,
     blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
   const strips = new THREE.Mesh(geometry, material); strips.name = 'underglow-strips'; strips.visible = false;
