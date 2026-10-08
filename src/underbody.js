@@ -2,7 +2,7 @@ import * as THREE from '../vendor/three.module.js';
 
 export const EXHAUST_TIP = { x: 0.47, y: -0.12, z: -1.585 };
 
-export function createBodyShellGeometry(bodyRings, frontOpenings = []) {
+export function createBodyShellGeometry(bodyRings, frontOpenings = [], rearOpenings = []) {
   const rings = bodyRings.map(ring => {
     const [left, right] = ring, floor = Math.min(left[1] + 0.16, ring[4][1] - 0.08);
     return [left,
@@ -23,7 +23,7 @@ export function createBodyShellGeometry(bodyRings, frontOpenings = []) {
   for (const end of [0, rings.length - 1]) {
     const contour = rings[end].map(([x, y]) => new THREE.Vector2(x, y));
     const vertices = contour.map((_, i) => end * sides + i), holes = [];
-    if (end > 0) for (const opening of frontOpenings) {
+    for (const opening of end === 0 ? rearOpenings : frontOpenings) {
       holes.push(opening.contour.map(([x, y]) => {
         vertices.push(positions.length / 3); positions.push(x, y, rings[end][0][2]);
         return new THREE.Vector2(x, y);

@@ -8,16 +8,22 @@ import { Vehicle } from '../src/vehicle.js';
 import { loadAmmo } from './ammo-loader.mjs';
 import { withCanvas } from './canvas.mjs';
 
-test('Rear lamps expose separate red tail lights and white reverse lenses', () => {
+test('Recessed rear lamps expose separate red tail lights and white reverse lenses', () => {
   const car = withCanvas(() => createRacingCar(0.18)); car.updateMatrixWorld(true);
   const ray = new THREE.Raycaster(), materials = car.userData;
   for (const [name, material] of [['rear-lamp', materials.tailMaterial], ['reverse-lamp', materials.reverseLampMaterial]]) {
-    const lenses = car.children.filter(part => part.name === name); assert.equal(lenses.length, 2);
+    const lenses = []; car.traverse(part => { if (part.name === name) lenses.push(part); });
+    assert.equal(lenses.length, 2);
     for (const lens of lenses) {
       assert.equal(lens.material, material);
+      const position = lens.getWorldPosition(new THREE.Vector3());
       for (const offset of [-0.015, 0, 0.015]) {
-        ray.set(new THREE.Vector3(lens.position.x + offset, lens.position.y, -3), new THREE.Vector3(0, 0, 1));
-        assert.equal(ray.intersectObject(car, true)[0]?.object, lens, 'A rear lens must remain visible outside the body');
+        const target = position.clone().add(new THREE.Vector3(offset, 0, 0));
+        for (const angle of [-0.3, 0, 0.3]) {
+          const origin = target.clone().add(new THREE.Vector3(angle, 0.07, -2));
+          ray.set(origin, target.clone().sub(origin).normalize());
+          assert.equal(ray.intersectObject(car, true)[0]?.object, lens, 'A rear lens must remain visible through its housing');
+        }
       }
     }
   }

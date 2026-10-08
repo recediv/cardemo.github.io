@@ -2,6 +2,7 @@ import * as THREE from '../vendor/three.module.js';
 import { createUnderglowStrips } from './underglow.js';
 import { createBodyShellGeometry, createUnderbodyMechanism, EXHAUST_TIP } from './underbody.js';
 import { FRONT_OPENINGS, createCarFront } from './car-front.js';
+import { REAR_OPENINGS, createCarRear } from './car-rear.js';
 import { createCarExterior } from './car-body.js';
 import { createCarGlass, createWindowFrames, createCabinFrameGeometry, createCabinGlassGeometry } from './car-glass.js';
 
@@ -103,7 +104,7 @@ export function createRacingCar(centerOfMassOffset = 0, { simplified = false } =
   const box = (size, position, material, name) => {
     const item = mesh(new THREE.BoxGeometry(...size), material, name); item.position.set(...position); return item;
   };
-  mesh(simplified ? loft(bodyRings) : createBodyShellGeometry(bodyRings, FRONT_OPENINGS), simplified ? paint : [paint, trim], 'tapered-body');
+  mesh(simplified ? loft(bodyRings) : createBodyShellGeometry(bodyRings, FRONT_OPENINGS, REAR_OPENINGS), simplified ? paint : [paint, trim], 'tapered-body');
   mesh(createCabinGlassGeometry(cabinRings), glass, 'sloping-windows');
   if (!simplified) {
     mesh(createCabinFrameGeometry(cabinRings), paint, 'cabin-frame');
@@ -142,7 +143,6 @@ export function createRacingCar(centerOfMassOffset = 0, { simplified = false } =
       const vent = box([0.13, 0.009, 0.29], [side * 0.49, bodyTop(0.87) + 0.004, 0.87], trim, 'bonnet-vent'); vent.rotation.x = 0.14;
     }
   }
-  box([1.05, 0.09, 0.05], [0, -0.035, -1.61], trim, 'rear-diffuser');
   const lamps = simplified ? stripePaint : new THREE.MeshStandardMaterial({ color: '#edf0eb', emissive: '#fffaf2', emissiveIntensity: 0 });
   const popupLamps = simplified ? null : new THREE.MeshStandardMaterial({ color: '#e8edf1', emissive: '#fff4e5', emissiveIntensity: 0, roughness: 0.18, metalness: 0.12 });
   const tails = simplified ? paint : new THREE.MeshStandardMaterial({ color: '#d0242c', emissive: '#ff0808', emissiveIntensity: 0 });
@@ -159,14 +159,12 @@ export function createRacingCar(centerOfMassOffset = 0, { simplified = false } =
     box([1.16, 0.06, 0.064], [0, -0.005, 1.606], paint, 'front-bumper');
     box([0.56, 0.028, 0.007], [0, 0.07, 1.641], trim, 'front-air-intake');
     for (const side of [-1, 1]) box([0.148, 0.03, 0.006], [side * 0.43, 0.073, 1.645], lamps, 'front-marker');
+    box([1.44, 0.07, 0.045], [0, 0.025, -1.598], trim, 'rear-bumper');
+    box([1.16, 0.022, 0.016], [0, -0.031, -1.605], trim, 'rear-diffuser');
+    for (const side of [-1, 1]) box([0.35, 0.055, 0.006], [side * 0.487, 0.141, -1.604], tails, 'rear-lamp');
   } else root.add(createCarFront(paint, trim, lamps, 'front-marker'));
+  if (!simplified) root.add(createCarRear(trim, tails, reverseLamps));
   for (const side of [-1, 1]) {
-    box([0.37, 0.055, 0.035], [side * 0.5, 0.15, -1.614], tails, 'rear-lamp');
-    if (!simplified) {
-      box([0.108, 0.072, 0.035], [side * 0.255, 0.15, -1.615], trim, 'reverse-lamp-frame');
-      box([0.084, 0.05, 0.038], [side * 0.255, 0.15, -1.62], reverseLamps, 'reverse-lamp');
-    }
-
     const popupX = side * POPUP_HEADLIGHT.x, popupZ = POPUP_HEADLIGHT.z, hingeY = bodyTop(popupZ) + 0.01;
     const coverGeometry = (halfWidth, offset, thickness) => {
       const geometry = loft([0, 1.4 - popupZ, POPUP_HEADLIGHT.length].map(z => {
