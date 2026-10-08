@@ -1,6 +1,8 @@
 import * as THREE from '../vendor/three.module.js';
 
-export function createBodyShellGeometry(bodyRings) {
+export const EXHAUST_TIP = { x: 0.47, y: -0.12, z: -1.585 };
+
+export function createBodyShellGeometry(bodyRings, frontOpenings = []) {
   const rings = bodyRings.map(ring => {
     const [left, right] = ring, floor = Math.min(left[1] + 0.16, ring[4][1] - 0.08);
     return [left,
@@ -20,9 +22,15 @@ export function createBodyShellGeometry(bodyRings) {
   // The recessed cross-section is concave, so its end caps need triangulation.
   for (const end of [0, rings.length - 1]) {
     const contour = rings[end].map(([x, y]) => new THREE.Vector2(x, y));
-    for (const [a, b, c] of THREE.ShapeUtils.triangulateShape(contour, [])) {
-      const start = end * sides;
-      painted.push(start + a, start + (end === 0 ? c : b), start + (end === 0 ? b : c));
+    const vertices = contour.map((_, i) => end * sides + i), holes = [];
+    if (end > 0) for (const opening of frontOpenings) {
+      holes.push(opening.contour.map(([x, y]) => {
+        vertices.push(positions.length / 3); positions.push(x, y, rings[end][0][2]);
+        return new THREE.Vector2(x, y);
+      }));
+    }
+    for (const [a, b, c] of THREE.ShapeUtils.triangulateShape(contour, holes)) {
+      painted.push(vertices[a], vertices[end === 0 ? c : b], vertices[end === 0 ? b : c]);
     }
   }
   const geometry = new THREE.BufferGeometry();
@@ -90,10 +98,24 @@ function createAssets() {
   const exhaustPath = [[0.16, -0.15, 0.59], [0.2, -0.153, 0.12], [0.26, -0.15, -0.3], [0.31, -0.147, -0.93]];
   for (let i = 1; i < exhaustPath.length; i++) pipe('exhaust', exhaustPath[i - 1], exhaustPath[i], 0.027);
   pipe('exhaust', [0.31, -0.124, -0.92], [0.31, -0.124, -1.3], 0.059, 12);
-  pipe('exhaust', [0.31, -0.124, -1.3], [0.51, -0.13, -1.48], 0.027);
+  const { x: tailX, y: tailY, z: tailZ } = EXHAUST_TIP;
+  const tailCurve = new THREE.CatmullRomCurve3([
+    [0.31, -0.124, -1.265], [0.32, -0.124, -1.325], [0.4, tailY, -1.36],
+    [tailX, tailY, tailZ + 0.2], [tailX, tailY, tailZ + 0.17],
+  ].map(point => new THREE.Vector3(...point)));
+  add('exhaust', new THREE.TubeGeometry(tailCurve, 20, 0.027, 10, false));
+  // The flared socket overlaps the chrome tip's inlet instead of ending in air.
+  add('exhaust', new THREE.CylinderGeometry(0.027, 0.052, 0.05, 12)
+    .rotateX(Math.PI / 2).translate(tailX, tailY, tailZ + 0.15));
   for (const z of [-1.02, -1.2]) {
     add('frame', new THREE.TorusGeometry(0.06, 0.007, 4, 12).translate(0.31, -0.124, z));
+    pipe('frame', [0.37, -0.124, z], [0.398, -0.166, z], 0.009);
+    pipe('frame', [0.398, -0.166, z], [0.425, -0.166, z], 0.009);
+    box('frame', [0.028, 0.02, 0.04], [0.425, -0.174, z]);
   }
+  add('frame', new THREE.TorusGeometry(0.04, 0.006, 4, 12).translate(tailX, tailY, tailZ + 0.15));
+  pipe('frame', [tailX, tailY + 0.044, tailZ + 0.15], [tailX, -0.045, tailZ + 0.15], 0.008);
+  box('frame', [0.06, 0.018, 0.045], [tailX, -0.043, tailZ + 0.15]);
 
   const materials = {
     frame: new THREE.MeshStandardMaterial({ color: '#293337', roughness: 0.85, metalness: 0.25 }),

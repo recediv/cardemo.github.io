@@ -13,6 +13,7 @@ export class Soundscape {
     this.context = null; this.enabled = false; this.volume = 0.45; this.birdClock = 0; this.voices = 0;
     this.engineGear = 0; this.engineDirection = 1; this.enginePrimed = false;
     this.engineRpm = ENGINE_IDLE_RPM; this.engineShiftRemaining = 0; this.engineShiftCooldown = 0;
+    this.exhaustShots = 0;
   }
   async start() {
     if (!this.context) this.create();
@@ -34,6 +35,7 @@ export class Soundscape {
     const data = noise.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
     this.noise = noise;
+    this.backfireBuffer = this.createBackfireBuffer();
     this.engine = c.createOscillator(); this.engine.type = 'sawtooth'; this.engine.frequency.value = 32;
     this.engineFilter = c.createBiquadFilter(); this.engineFilter.type = 'lowpass'; this.engineFilter.frequency.value = 220; this.engineFilter.Q.value = 0.65;
     this.engineGain = c.createGain(); this.engineGain.gain.value = 0;
@@ -157,6 +159,27 @@ export class Soundscape {
     }
   }
   resume() { if (this.context && this.enabled) return this.context.resume(); }
+  createBackfireBuffer() {
+    const c = this.context, length = Math.ceil(c.sampleRate * 0.16), buffer = c.createBuffer(1, length, c.sampleRate);
+    const samples = buffer.getChannelData(0); let noise = 0, phase = 0;
+    for (let i = 0; i < length; i++) {
+      const time = i / c.sampleRate;
+      noise = noise * 0.82 + (Math.random() * 2 - 1) * 0.18;
+      phase += Math.PI * 2 * (65 + 110 * Math.exp(-time * 18)) / c.sampleRate;
+      const envelope = (1 - Math.exp(-time * 800)) * Math.exp(-time * 37) * clamp((0.16 - time) / 0.015);
+      samples[i] = (Math.sin(phase) * 0.65 + noise * 0.7) * envelope;
+    }
+    return buffer;
+  }
+  exhaustPop(power) {
+    const c = this.context;
+    if (!c || !this.enabled || c.state !== 'running' || this.voices >= 5) return;
+    const source = c.createBufferSource(), gain = c.createGain();
+    source.buffer = this.backfireBuffer; source.playbackRate.value = 0.91 + Math.random() * 0.12;
+    gain.gain.value = 0.24 + clamp(power) * 0.12;
+    source.connect(gain); gain.connect(this.master); this.voices++; source.start();
+    source.onended = () => { this.voices--; source.disconnect(); gain.disconnect(); };
+  }
   updateEngine(dt, time, elapsed, speed, signedThrottle, boost, input) {
     const step = clamp(dt, 0, 0.1), throttle = clamp(Math.abs(signedThrottle));
     const requestedDirection = input.backward && !input.forward ? -1 : input.forward && !input.backward ? 1
@@ -202,9 +225,11 @@ export class Soundscape {
     this.engineGain.gain.setTargetAtTime((0.065 + load * 0.042 + clamp(speed / 25) * 0.028 + boost * 0.045)
       * (1 - clutchCut * 0.67), time, clutchCut > 0 ? 0.018 : 0.055);
   }
-  update(dt, environment, vehicle, input, inPuddle) {
+  update(dt, environment, vehicle, input, inPuddle, exhaust = null) {
+    const shots = exhaust?.shots ?? 0, fired = shots !== this.exhaustShots; this.exhaustShots = shots;
     const c = this.context;
     if (!c || !this.enabled || c.state !== 'running') return;
+    if (fired && shots > 0) this.exhaustPop(exhaust.lastShotPower);
     const t = c.currentTime, speed = vehicle.speed, signedThrottle = vehicle.throttle ?? Number(input.forward) - Number(input.backward), boost = Number(input.boost);
     this.hornGain.gain.setTargetAtTime(input.horn ? 0.13 : 0, t, input.horn ? 0.012 : 0.025);
     this.updateEngine(dt, t, environment.elapsed, speed, signedThrottle, boost, input);

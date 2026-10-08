@@ -1,5 +1,7 @@
 import * as THREE from '../vendor/three.module.js';
-import { randomGenerator } from './simulation.js';
+import { randomGenerator, damp } from './simulation.js';
+import { POPUP_OPEN_ANGLE } from './car-model.js';
+import { CarLightControl } from './car-light-control.js';
 
 const FORWARD = new THREE.Vector3(0, 0, 1);
 const LENGTH = 24;
@@ -124,16 +126,24 @@ export class HeadlightSystem {
     this.lights = [];
     this.volumes = [];
     this.elapsed = null;
+    this.control = new CarLightControl();
     this.activation = 0;
+    this.markerActivation = 0;
+    this.opening = 0; this.raised = false; this.autoRaised = false;
+    this.popups = ['popup-headlight-left', 'popup-headlight-right'].map(name => carRoot.getObjectByName(name));
+    this.sources = this.popups.map(popup => popup?.getObjectByName('popup-light-source'));
+    // The lens housing is fixed inside the animated popup.
+    this.sourceOffsets = this.sources.map(source => source ? source.position.clone().applyQuaternion(source.parent.quaternion).add(source.parent.position) : null);
+    this.sourcePosition = new THREE.Vector3(); this.beamDirection = new THREE.Vector3();
     this.carPosition = new THREE.Vector3();
     this.windTravel = new THREE.Vector2();
-    const beamColor = new THREE.Color('#fff1da');
+    const beamColor = carRoot.userData.popupLampMaterial.emissive.clone();
     const geometry = new THREE.BoxGeometry(HALF_WIDTH * 2, HALF_HEIGHT * 2, LENGTH).translate(0, 0, LENGTH / 2);
     for (const side of [-1, 1]) {
-      const source = new THREE.Vector3(side * 0.6, 0.29, 1.69);
-      const target = new THREE.Vector3(side * 0.6, -0.4, 20);
+      const source = new THREE.Vector3(side * 0.415, 0.56, 1.4);
+      const target = new THREE.Vector3(side * 0.415, -0.4, 20);
       const light = new THREE.SpotLight(beamColor, 0, 28, 0.42, 1, 2);
-      light.name = 'soft-headlight';
+      light.name = 'popup-headlight-beam';
       light.position.copy(source);
       light.target.position.copy(target);
       carRoot.add(light, light.target);
@@ -206,29 +216,47 @@ export class HeadlightSystem {
   }
 
   update(environment) {
-    const darkness = THREE.MathUtils.smoothstep(1 - environment.daylight, 0.04, 0.85);
-    this.activation = darkness;
+    const darkness = THREE.MathUtils.smoothstep(0.76 - environment.daylight, 0, 0.62);
     const rain = THREE.MathUtils.clamp(environment.rain, 0, 1);
     const time = environment.elapsed;
     const dt = this.elapsed === null ? 0 : THREE.MathUtils.clamp(time - this.elapsed, 0, 0.1);
     this.elapsed = time;
+    this.control.autoActivation = darkness;
+    if (environment.daylight < 0.6) this.autoRaised = true;
+    else if (environment.daylight > 0.76) this.autoRaised = false;
+    this.raised = this.control.mode === 'auto' ? this.autoRaised : this.control.mode === 'on';
+    this.opening = damp(this.opening, Number(this.raised), 5.5, dt);
+    for (const popup of this.popups) if (popup) popup.rotation.x = POPUP_OPEN_ANGLE * this.opening;
+    this.markerActivation = this.control.activation;
+    this.activation = this.markerActivation * THREE.MathUtils.smoothstep(this.opening, 0.78, 0.99);
     const wind = environment.windStrength;
     this.windTravel.x = (this.windTravel.x + dt * wind * 0.38) % DUST_PERIOD;
     this.windTravel.y = (this.windTravel.y + dt * wind * 0.19) % DUST_PERIOD;
-    this.carRoot.updateWorldMatrix(true, true);
-    this.carRoot.getWorldPosition(this.carPosition);
+    this.carRoot.updateWorldMatrix(true, false);
+    this.carPosition.setFromMatrixPosition(this.carRoot.matrixWorld);
     for (let i = 0; i < this.lights.length; i++) {
-      this.lights[i].intensity = darkness * 220;
+      if (this.sourceOffsets[i]) {
+        this.sourcePosition.copy(this.sourceOffsets[i]).applyQuaternion(this.popups[i].quaternion).add(this.popups[i].position);
+        this.lights[i].position.copy(this.sourcePosition);
+      }
+      this.lights[i].intensity = this.activation * 220;
       const volume = this.volumes[i];
-      volume.mesh.visible = darkness > 0.005;
-      volume.uniforms.worldToVolume.value.copy(volume.frame.matrixWorld).invert();
-      volume.uniforms.volumeToWorld.value.copy(volume.frame.matrixWorld);
-      volume.uniforms.density.value = darkness * (0.023 + rain * 0.010);
+      volume.frame.position.copy(this.lights[i].position);
+      this.beamDirection.subVectors(this.lights[i].target.position, this.lights[i].position).normalize();
+      volume.frame.quaternion.setFromUnitVectors(FORWARD, this.beamDirection);
+      volume.mesh.visible = this.activation > 0.005;
+      if (volume.mesh.visible) {
+        volume.frame.updateMatrix();
+        volume.frame.matrixWorld.multiplyMatrices(this.carRoot.matrixWorld, volume.frame.matrix);
+        volume.uniforms.worldToVolume.value.copy(volume.frame.matrixWorld).invert();
+        volume.uniforms.volumeToWorld.value.copy(volume.frame.matrixWorld);
+      }
+      volume.uniforms.density.value = this.activation * (0.023 + rain * 0.010);
       volume.uniforms.time.value = time;
     }
-    this.dust.visible = darkness > 0.005 && rain < 0.995;
+    this.dust.visible = this.activation > 0.005 && rain < 0.995;
     this.dust.material.uniforms.time.value = time;
-    this.dust.material.uniforms.dustAmount.value = darkness * (1 - rain * 0.94) * 0.30;
+    this.dust.material.uniforms.dustAmount.value = this.activation * (1 - rain * 0.94) * 0.30;
     if (typeof window !== 'undefined') this.dust.material.uniforms.pixelScale.value = window.innerHeight * Math.min(window.devicePixelRatio || 1, 1.5) * 0.5;
   }
 }

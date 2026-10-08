@@ -64,7 +64,7 @@ export class UnderglowSystem {
   }
 
   update() {
-    const car = this.vehicle.mesh, darkness = this.vehicle.headlightSystem.activation;
+    const car = this.vehicle.mesh, darkness = this.vehicle.headlightSystem.markerActivation;
     updateUnderglowStrips(car, darkness);
     this.up.copy(UP).applyQuaternion(car.quaternion);
     const activation = darkness * THREE.MathUtils.smoothstep(this.up.y, 0, 0.6);

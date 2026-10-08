@@ -2,6 +2,7 @@ import * as THREE from '../vendor/three.module.js';
 import { damp, RecoveryTimer } from './simulation.js';
 import { createRacingCar, RACING_COLLIDERS } from './car-model.js';
 import { HeadlightSystem } from './headlights.js';
+import { applyCarLighting } from './car-lighting.js';
 import { createRacingWheel } from './wheels.js';
 import { WORLD_SIZE } from './scene-config.js';
 
@@ -187,7 +188,7 @@ export class Vehicle {
       wheel.mesh.quaternion.slerpQuaternions(wheel.previousQuaternion, wheel.quaternion, alpha);
     }
     this.headlightSystem.update(environment);
-    this.lampMaterial.emissiveIntensity = this.headlightSystem.activation * 3;
+    applyCarLighting(this.mesh.userData, this.headlightSystem);
   }
   recover(offTrack = false) {
     let position, quaternion;

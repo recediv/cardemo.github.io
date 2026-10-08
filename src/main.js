@@ -2,6 +2,7 @@ import * as THREE from '../vendor/three.module.js';
 import { Physics } from './physics.js';
 import { Vehicle } from './vehicle.js';
 import { BestLapGhost } from './ghost.js';
+import { ExhaustSystem } from './exhaust.js';
 import { UnderglowSystem } from './underglow.js';
 import { Track } from './track.js';
 import { World } from './world.js';
@@ -36,8 +37,9 @@ async function boot() {
   const environment = new EnvironmentState(), laps = new LapTimer(), sound = new Soundscape();
   const vehicle = new Vehicle(scene, physics, track, notify);
   const ghost = new BestLapGhost(scene, vehicle);
+  const exhaust = new ExhaustSystem(scene, vehicle, camera, renderer, world.windField.windDirection.value);
   const underglow = new UnderglowSystem(scene, vehicle, world);
-  if (new URLSearchParams(location.search).has('inspect')) window.__DEMO__ = { renderer, scene, camera, physics, track, world, environment, vehicle, ghost, underglow };
+  if (new URLSearchParams(location.search).has('inspect')) window.__DEMO__ = { renderer, scene, camera, physics, track, world, environment, vehicle, ghost, exhaust, underglow };
   const monitor = new PerformanceMonitor(renderer, $('performance'));
   physics.onImpact = (strength, position) => sound.impact(strength, position, vehicle.item.position);
   let running = false, cameraIndex = 0, lowQuality = false, contextLost = false;
@@ -51,14 +53,22 @@ async function boot() {
     $('camera-button').setAttribute('title', `Camera: ${name} · C`);
     updateCamera(1, true); notify(`Camera: ${name}`);
   }
-  function reset() { vehicle.reset(); laps.reset(); ghost.reset(); accumulator = 0; target.copy(vehicle.item.position); updateCamera(1, true); }
+  function reset() { vehicle.reset(); exhaust.clear(); laps.reset(); ghost.reset(); accumulator = 0; target.copy(vehicle.item.position); updateCamera(1, true); }
   async function toggleSound() {
     try { if (sound.enabled) sound.mute(); else await sound.start(); }
     catch (error) { console.error('Could not enable sound:', error); notify('Could not enable sound'); }
     updateSoundButton();
   }
   function updateSoundButton() { $('sound-button').setAttribute('aria-pressed', String(sound.enabled)); $('sound-button').setAttribute('aria-label', sound.enabled ? 'Mute sound' : 'Enable sound'); }
-  const input = new Input({ KeyR: reset, KeyC: cameraMode, KeyF: () => vehicle.flip(), KeyM: toggleSound });
+  function setLightMode(mode) {
+    vehicle.headlightSystem.control.mode = mode;
+    $('light-mode').value = mode;
+    notify(`Lights: ${mode === 'auto' ? 'Auto' : mode === 'on' ? 'On' : 'Off'}`);
+  }
+  function toggleLights() { setLightMode(vehicle.headlightSystem.control.toggle()); }
+  $('light-mode').value = vehicle.headlightSystem.control.mode;
+  $('light-mode').addEventListener('change', event => setLightMode(event.target.value));
+  const input = new Input({ KeyR: reset, KeyC: cameraMode, KeyF: toggleLights, KeyQ: () => vehicle.flip(), KeyM: toggleSound });
   $('camera-button').addEventListener('click', cameraMode);
   $('reset-button').addEventListener('click', reset);
   $('flip-button').addEventListener('click', () => vehicle.flip());
@@ -185,8 +195,9 @@ async function boot() {
       ghost.render(Math.max(0, laps.time - fixedStep + accumulator));
     } else { vehicle.render(1, environment); ghost.render(laps.time); }
     updateCamera(dt); world.update(dt, environment, camera, false, vehicle);
+    exhaust.update(dt, environment, input);
     underglow.update();
-    sound.update(dt, environment, vehicle, input, world.inPuddle(vehicle.item.position, environment.wetness));
+    sound.update(dt, environment, vehicle, input, world.inPuddle(vehicle.item.position, environment.wetness), exhaust);
     uiElapsed += dt; if (uiElapsed > 0.075) { updateUI(); uiElapsed = 0; }
     if (timestamp > toastDeadline) $('toast').classList.remove('visible');
     renderer.render(scene, camera); monitor.endFrame();

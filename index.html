@@ -22,9 +22,10 @@
     <input id="hour" type="range" min="0" max="23.9" step="0.1" value="14">
     <div class="preset-times"><button data-hour="7">Morning</button><button data-hour="14">Day</button><button data-hour="18.5">Evening</button><button data-hour="0">Night</button></div>
     <label class="row" for="rain-toggle">Rain <input id="rain-toggle" type="checkbox"></label>
+    <label for="light-mode">Lights &amp; underglow · F</label><select id="light-mode"><option value="auto">Auto</option><option value="on">On</option><option value="off">Off</option></select>
     <label for="volume">Volume</label><input id="volume" type="range" min="0" max="1" step="0.05" value="0.45">
     <label for="quality">Quality</label><select id="quality"><option value="high">Standard</option><option value="low">Low</option></select>
-    <div class="settings-actions"><button id="reset-button">Reset · R</button><button id="flip-button">Flip · F</button></div>
+    <div class="settings-actions"><button id="reset-button">Reset · R</button><button id="flip-button">Flip · Q</button></div>
     <p class="small-note">If the car flips and stops, it returns to its wheels after 3 seconds.</p>
   </section>
   <aside class="map-panel panel" aria-label="Track map">
@@ -40,7 +41,7 @@
   <aside id="performance" class="performance panel" aria-label="Performance" title="CPU and GPU show time spent on each frame. GPU timing is not supported in all browsers.">
     <span>FPS <b data-metric="fps">—</b></span><span>FRAME <b data-metric="frame">—</b></span><span>CPU <b data-metric="cpu">—</b></span><span>GPU <b data-metric="gpu">—</b></span>
   </aside>
-  <footer class="controls panel"><span><kbd>W A S D</kbd> / arrows — drive</span><span><kbd>Space</kbd> brake</span><span><kbd>Shift</kbd> boost</span><span><kbd>E</kbd> horn</span><span><kbd>R</kbd> reset</span><span><kbd>C</kbd> camera</span></footer>
+  <footer class="controls panel"><span><kbd>W A S D</kbd> / arrows — drive</span><span><kbd>Space</kbd> brake</span><span><kbd>Shift</kbd> boost</span><span><kbd>E</kbd> horn</span><span><kbd>F</kbd> lights</span><span><kbd>Q</kbd> flip</span><span><kbd>R</kbd> reset</span><span><kbd>C</kbd> camera</span></footer>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <div id="recovery" class="recovery" hidden></div>
   <div class="touch-controls" aria-label="Touch controls">

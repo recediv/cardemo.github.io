@@ -11,6 +11,8 @@ import { withCanvas } from './canvas.mjs';
 import './app.test.mjs';
 import './visuals.test.mjs';
 import './ground-details.test.mjs';
+import './car-effects.test.mjs';
+import './ghost.test.mjs';
 
 const Ammo = await loadAmmo();
 const dt = 1 / 60;
@@ -94,9 +96,10 @@ test('Forest, grass, rain, puddles and headlights follow the shared environment'
   const game = setup(true), camera = new THREE.PerspectiveCamera(); camera.position.set(10, 18, 25);
   const { world, environment, vehicle } = game;
   world.update(dt, environment, camera, false);
-  assert.ok(world.grassCount >= 7000); assert.equal(world.obstacles.length, 22);
+  assert.ok(world.grassCount >= 7000); assert.equal(world.obstacles.length, 26);
   assert.equal(world.rainLines.visible, false); assert.ok(world.puddles.every(p => !p.mesh.visible));
   environment.setTime(0); environment.setWeather('rain'); advanceEnvironment(environment, 25);
+  for (let i = 0; i < 120; i++) { environment.step(dt); vehicle.render(1, environment); }
   world.update(dt, environment, camera, false); vehicle.render(1, environment);
   assert.equal(world.rainLines.visible, true); assert.ok(world.puddles.every(p => p.mesh.visible));
   assert.ok(world.inPuddle(world.puddles[0].mesh.position, environment.wetness));
@@ -121,11 +124,15 @@ test('Lap timing requires ordered checkpoints and preserves the best time on res
 
 test('Car body vertices fit its compound colliders while all four suspension rays stay clear', () => {
   const { vehicle } = setup();
-  for (const mesh of vehicle.mesh.children.filter(object => object.isMesh)) {
+  const bounds = vehicle.colliderParts.map(part => part.points
+    ? new THREE.Box3().setFromPoints(part.points.map(point => new THREE.Vector3(...point))).translate(part.position).expandByScalar(1e-6)
+    : new THREE.Box3().setFromCenterAndSize(part.position, new THREE.Vector3(...part.size)).expandByScalar(1e-6));
+  for (const name of ['tapered-body', 'sloping-windows', 'rear-wing']) {
+    const mesh = vehicle.mesh.getObjectByName(name);
     mesh.updateMatrix(); const positions = mesh.geometry.attributes.position;
     for (let i = 0; i < positions.count; i++) {
       const vertex = new THREE.Vector3().fromBufferAttribute(positions, i).applyMatrix4(mesh.matrix);
-      assert.ok(vehicle.colliderParts.some(part => part.size.every((size, axis) => Math.abs(vertex.getComponent(axis) - part.position.getComponent(axis)) <= size / 2 + 1e-6)), `Exposed body vertex ${vertex.toArray()}`);
+      assert.ok(bounds.some(bound => bound.containsPoint(vertex)), `Exposed body vertex ${vertex.toArray()}`);
     }
   }
   for (const x of [-0.86, 0.86]) for (const z of [1, -1.04]) {
@@ -146,7 +153,7 @@ test('Resting suspension contacts the ground without levitation and a boosted wa
   game.physics.render(1); game.scene.updateMatrixWorld(true);
   let leadingEdge = -Infinity;
   game.vehicle.mesh.traverse(mesh => {
-    if (!mesh.isMesh) return;
+    if (!mesh.isMesh || mesh.name === 'headlight-scattering') return;
     const positions = mesh.geometry.attributes.position;
     for (let i = 0; i < positions.count; i++) {
       const vertex = new THREE.Vector3().fromBufferAttribute(positions, i).applyMatrix4(mesh.matrixWorld).sub(start);

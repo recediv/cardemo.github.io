@@ -9,8 +9,16 @@ import { DayPalette } from '../src/day-cycle.js';
 import { createGrassGeometry, createPineGeometry, createCanopyGeometry, applyWind } from '../src/vegetation.js';
 import { createTerrainField } from '../src/terrain.js';
 import { withCanvas } from './canvas.mjs';
+import { Physics } from '../src/physics.js';
+import { loadAmmo } from './ammo-loader.mjs';
 
-const makeWorld = (...args) => withCanvas(() => new World(...args));
+const Ammo = await loadAmmo();
+const makeWorld = (scene, overrides, track) => withCanvas(() => {
+  const physics = Object.assign(new Physics(Ammo), overrides);
+  const observeBox = overrides.box;
+  if (observeBox) physics.box = (...args) => Object.assign(observeBox(...args), Physics.prototype.box.apply(physics, args));
+  return new World(scene, physics, track);
+});
 
 function intersects(a, b, c, d) {
   const cross = (p, q, r) => (q.x - p.x) * (r.z - p.z) - (q.z - p.z) * (r.x - p.x);
@@ -55,31 +63,32 @@ test('Triangle grass and leaf-cloud crowns have usable geometry, colors and wind
   assert.equal(grass.attributes.position.getY(1), 0);
   for (const geometry of [grass, createPineGeometry(), createCanopyGeometry()]) {
     const count = geometry.attributes.position.count;
-    for (const name of ['normal', 'plantWeight', 'plantDerivative', ...(geometry === grass ? [] : ['color'])]) {
+    for (const name of ['normal', ...(geometry === grass ? ['plantWeight', 'plantDerivative'] : ['color', 'leafData', 'uv'])]) {
       assert.equal(geometry.attributes[name].count, count);
       for (const value of geometry.attributes[name].array) assert.ok(Number.isFinite(value));
     }
-    for (const weight of geometry.attributes.plantWeight.array) assert.ok(weight >= 0 && weight <= 1);
+    if (geometry === grass) for (const weight of geometry.attributes.plantWeight.array) assert.ok(weight >= 0 && weight <= 1);
+    else {
+      assert.equal(geometry.attributes.leafData.itemSize, 4);
+      for (let i = 0; i < count; i++) assert.ok(geometry.attributes.leafData.getW(i) >= 0 && geometry.attributes.leafData.getW(i) <= 1);
+    }
+    for (const index of geometry.index?.array ?? []) assert.ok(index >= 0 && index < count);
   }
 });
 
-test('Wind bends plant normals and the depth pass uses the same displacement', () => {
+test('Color and shadow passes share the same wind displacement', () => {
   const material = new THREE.MeshLambertMaterial({ vertexColors: true });
   const time = { value: 0 }, wind = { value: 1 }, depth = applyWind(material, 'oak', time, wind);
   const colorShader = { vertexShader: THREE.ShaderLib.lambert.vertexShader, uniforms: {} };
   const depthShader = { vertexShader: THREE.ShaderLib.depth.vertexShader, uniforms: {} };
   material.onBeforeCompile(colorShader); depth.onBeforeCompile(depthShader);
   for (const shader of [colorShader, depthShader]) {
-    assert.match(shader.vertexShader, /transformed\.xz \+= forestBend\(\) \* plantWeight/);
-    assert.match(shader.vertexShader, /objectNormal\.y -= dot\(normalBend, objectNormal\.xz\) \* plantDerivative/);
+    assert.ok(shader.vertexShader.includes('forestTreeOffset(treeData.xy, treeData.w)'));
+    assert.ok(shader.vertexShader.includes('transformed += vec3('));
     assert.equal(shader.uniforms.worldTime, time); assert.equal(shader.uniforms.worldWind, wind);
   }
-  // At the tip of a bent vertical leaf, the corrected normal stays perpendicular
-  // to its deformed tangent. The previous shader left the normal unchanged.
-  const bend = new THREE.Vector2(0.12, 0.04), derivative = 4;
-  const tangent = new THREE.Vector3(bend.x * derivative, 1, bend.y * derivative);
-  const normal = new THREE.Vector3(1, -bend.x * derivative, 0).normalize();
-  assert.ok(Math.abs(tangent.dot(normal)) < 1e-8);
+  const displacement = shader => shader.vertexShader.slice(shader.vertexShader.indexOf('#include <displacementmap_vertex>'), shader.vertexShader.indexOf('#include <project_vertex>')).replace(/\s+/g, ' ');
+  assert.equal(displacement(colorShader), displacement(depthShader));
 });
 
 test('Directional shadows keep their world volume and follow the time of day', () => {
@@ -107,9 +116,9 @@ test('Puddle collision area matches its rotated visible ellipse', () => {
   assert.ok(!world.inPuddle(mesh.position, 0));
 });
 
-test('Automatic rain is short, infrequent and waits for a fully dry road plus a dry break', () => {
+test('Automatic rain uses random pauses and waits for a fully dry road plus a dry break', () => {
   const env = new EnvironmentState(); env.setTime(0); env.wind = 0;
-  assert.equal(env.dayDuration, 90); assert.ok(env.clearDuration >= 120); assert.ok(env.rainDuration <= 20);
+  assert.equal(env.dayDuration, 45); assert.ok(env.clearDuration >= 135 && env.clearDuration <= 270); assert.ok(env.rainDuration <= 20);
   const dt = 1 / 60; let rainStarted = null, clearStarted = 0, episodes = 0;
   for (let i = 0; i < 60 * 900; i++) {
     const phase = env.weatherPhase, wetness = env.wetness, dryClock = env.dryClock; env.step(dt);
@@ -119,7 +128,7 @@ test('Automatic rain is short, infrequent and waits for a fully dry road plus a 
       rainStarted = i * dt; episodes++;
     } else { assert.ok(i * dt - rainStarted <= env.rainDuration + dt * 2); clearStarted = i * dt; }
   }
-  assert.ok(episodes >= 3 && episodes <= 6);
+  assert.ok(episodes >= 2 && episodes <= 6);
   env.weatherPhase = 'clear'; env.weatherClock = 1000; env.wetness = 0.8; env.dryClock = 100;
   env.step(dt); assert.equal(env.weatherPhase, 'clear');
   env.setWeather('rain'); for (let i = 0; i < 60 * 30; i++) env.step(dt); assert.ok(env.rain > 0.99);
@@ -157,9 +166,10 @@ test('Leaf shaders share wind while shadow billboards keep a fixed world orienta
     const depth = { vertexShader: THREE.ShaderLib.depth.vertexShader, fragmentShader: THREE.ShaderLib.depth.fragmentShader, uniforms: {} };
     mesh.material.onBeforeCompile(color); mesh.customDepthMaterial.onBeforeCompile(depth);
     for (const shader of [color, depth]) {
-      assert.match(shader.vertexShader, /transformed = leafCenter \+ cloudLocalDirection/);
-      assert.match(shader.vertexShader, /transformed\.xz \+= forestBend\(\) \* plantWeight/);
-      assert.equal(shader.uniforms.foliageCameraRight, shader === depth ? world.shadowFoliageView.foliageCameraRight : world.viewUniforms.foliageCameraRight);
+      assert.ok(shader.vertexShader.includes('transformed = leafData.xyz + movingCorner;'));
+      assert.ok(shader.vertexShader.includes('forestTreeOffset(treeData.xy, treeData.w)'));
+      assert.doesNotMatch(shader.vertexShader, /foliageCameraRight|foliageCameraUp/);
+      assert.equal(shader.uniforms.worldTime, world.timeUniform); assert.equal(shader.uniforms.worldWind, world.windUniform);
     }
     assert.equal(mesh.customDepthMaterial.alphaMap, mesh.material.alphaMap);
     assert.equal(mesh.customDepthMaterial.alphaTest, mesh.material.alphaTest);

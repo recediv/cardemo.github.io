@@ -1,6 +1,6 @@
 import * as THREE from '../vendor/three.module.js';
-import { createRacingCar } from './car-model.js';
-import { updateUnderglowStrips } from './underglow.js';
+import { POPUP_OPEN_ANGLE } from './car-model.js';
+import { createGhostCar, createGhostWheel } from './ghost-model.js';
 
 const SAMPLE_INTERVAL = 1 / 30;
 const MAX_LAP_SECONDS = 10 * 60;
@@ -17,42 +17,11 @@ function invertColor(color) {
 function ghostMaterial(original) {
   const material = original.clone();
   if (material.color) invertColor(material.color);
-  // Keep unlit surfaces unlit. Only the existing lamp colours are inverted.
   if (material.emissive && original.emissive.getHex() !== 0) invertColor(material.emissive);
   material.transparent = true;
   material.opacity = original.opacity * GHOST_OPACITY;
-  material.alphaTest = original.alphaTest * GHOST_OPACITY;
   material.depthWrite = false;
   material.forceSinglePass = true;
-
-  const previous = original.onBeforeCompile, key = original.customProgramCacheKey();
-  material.onBeforeCompile = (shader, renderer) => previous.call(material, shader, renderer);
-  material.customProgramCacheKey = () => key;
-  if (original.map && original.color) {
-    // Inverting only the white tint would make a mapped number decal black.
-    // Invert its sampled colour instead, inside the original standard shader;
-    // the real car's shared texture and material remain unchanged.
-    material.onBeforeCompile = (shader, renderer) => {
-      previous.call(material, shader, renderer);
-      shader.uniforms.ghostSourceColor = { value: original.color.clone() };
-      shader.fragmentShader = `
-        uniform vec3 ghostSourceColor;
-        vec3 ghostToSRGB(vec3 c) {
-          return mix(c * 12.92, 1.055 * pow(max(c, vec3(0.0)), vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));
-        }
-        vec3 ghostFromSRGB(vec3 c) {
-          return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
-        }
-      ` + shader.fragmentShader;
-      shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>', `
-        #include <map_fragment>
-        #ifdef USE_MAP
-          diffuseColor.rgb = ghostFromSRGB(vec3(1.0) - clamp(ghostToSRGB(ghostSourceColor * sampledDiffuseColor.rgb), 0.0, 1.0));
-        #endif
-      `);
-    };
-    material.customProgramCacheKey = () => `${key}-ghost-inverted-map-v1`;
-  }
   return material;
 }
 
@@ -62,25 +31,23 @@ export class BestLapGhost {
     this.best = null;
     this.bestDuration = null;
     this.group = new THREE.Group(); this.group.name = 'best-lap-ghost';
-    this.mesh = createRacingCar();
-    for (const child of this.mesh.children) child.position.y += vehicle.centerOfMassOffset ?? 0.18;
-    this.wheels = vehicle.wheels.map(wheel => wheel.mesh.clone(true));
+    this.mesh = createGhostCar(vehicle.centerOfMassOffset ?? 0.18);
+    this.wheels = vehicle.wheels.map(() => createGhostWheel());
     this.objects = [this.mesh, ...this.wheels];
+    this.physicalObjects = [vehicle.item, ...vehicle.wheels];
     this.group.add(...this.objects);
     const materials = new Map();
     this.group.traverse(object => {
       if (!object.isMesh) return;
       object.castShadow = false;
-      object.receiveShadow = true;
+      object.receiveShadow = false;
       const cloneMaterial = original => {
         if (!materials.has(original)) materials.set(original, ghostMaterial(original));
         return materials.get(original);
       };
       object.material = Array.isArray(object.material) ? object.material.map(cloneMaterial) : cloneMaterial(object.material);
     });
-    this.mesh.userData.lampMaterial = materials.get(this.mesh.userData.lampMaterial);
-    this.mesh.userData.tailMaterial = materials.get(this.mesh.userData.tailMaterial);
-    this.mesh.userData.underglowMaterial = materials.get(this.mesh.userData.underglowMaterial);
+    this.popups = ['popup-headlight-left', 'popup-headlight-right'].map(name => this.mesh.getObjectByName(name));
     this.group.visible = false;
     scene.add(this.group);
     this.quaternionA = new THREE.Quaternion(); this.quaternionB = new THREE.Quaternion();
@@ -88,9 +55,8 @@ export class BestLapGhost {
   }
 
   writePose(poses) {
-    const physical = [this.vehicle.item, ...this.vehicle.wheels];
-    for (let i = 0; i < physical.length; i++) {
-      const offset = i * POSE_SIZE, { position, quaternion } = physical[i];
+    for (let i = 0; i < this.physicalObjects.length; i++) {
+      const offset = i * POSE_SIZE, { position, quaternion } = this.physicalObjects[i];
       poses[offset] = position.x; poses[offset + 1] = position.y; poses[offset + 2] = position.z;
       poses[offset + 3] = quaternion.x; poses[offset + 4] = quaternion.y;
       poses[offset + 5] = quaternion.z; poses[offset + 6] = quaternion.w;
@@ -151,7 +117,8 @@ export class BestLapGhost {
       this.group.visible = false; return;
     }
     this.group.visible = true;
-    updateUnderglowStrips(this.mesh, this.vehicle.headlightSystem.activation, GHOST_OPACITY);
+    const opening = this.vehicle.headlightSystem?.opening ?? 0;
+    for (const popup of this.popups) popup.rotation.x = POPUP_OPEN_ANGLE * opening;
     const frames = this.best;
     if (time < frames[this.playbackIndex].time) this.playbackIndex = 0;
     while (this.playbackIndex < frames.length - 2 && frames[this.playbackIndex + 1].time <= time) this.playbackIndex++;
