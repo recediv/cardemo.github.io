@@ -1,5 +1,6 @@
 import * as THREE from '../vendor/three.module.js';
 import { createRacingCar } from './car-model.js';
+import { updateUnderglowStrips } from './underglow.js';
 
 const SAMPLE_INTERVAL = 1 / 30;
 const MAX_LAP_SECONDS = 10 * 60;
@@ -79,6 +80,7 @@ export class BestLapGhost {
     });
     this.mesh.userData.lampMaterial = materials.get(this.mesh.userData.lampMaterial);
     this.mesh.userData.tailMaterial = materials.get(this.mesh.userData.tailMaterial);
+    this.mesh.userData.underglowMaterial = materials.get(this.mesh.userData.underglowMaterial);
     this.group.visible = false;
     scene.add(this.group);
     this.quaternionA = new THREE.Quaternion(); this.quaternionB = new THREE.Quaternion();
@@ -149,6 +151,7 @@ export class BestLapGhost {
       this.group.visible = false; return;
     }
     this.group.visible = true;
+    updateUnderglowStrips(this.mesh, this.vehicle.headlightSystem.activation, GHOST_OPACITY);
     const frames = this.best;
     if (time < frames[this.playbackIndex].time) this.playbackIndex = 0;
     while (this.playbackIndex < frames.length - 2 && frames[this.playbackIndex + 1].time <= time) this.playbackIndex++;

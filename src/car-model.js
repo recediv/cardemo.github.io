@@ -1,4 +1,5 @@
 import * as THREE from '../vendor/three.module.js';
+import { createUnderglowStrips } from './underglow.js';
 
 // The visible surfaces and the physical hulls share these vertices.
 const bodySections = [
@@ -116,5 +117,7 @@ export function createRacingCar() {
     decal.castShadow = false;
   }
   root.userData.lampMaterial = lamps; root.userData.tailMaterial = tails;
+  const underglow = createUnderglowStrips(); root.add(underglow);
+  root.userData.underglowMaterial = underglow.material; root.userData.underglowMesh = underglow;
   return root;
 }

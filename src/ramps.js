@@ -131,6 +131,20 @@ export function addTrackRamps(scene, physics, track, palette, obstacles) {
     const arrowMesh = new THREE.Mesh(markings, paint); arrowMesh.name = 'ramp-guides'; arrowMesh.receiveShadow = true; ramp.add(arrowMesh);
     return {
       mesh: ramp, progress: p.progress,
+      surfaceAt(position, result) {
+        const dx = position.x - p.position.x, dz = position.z - p.position.z;
+        const along = dx * p.tangent.x + dz * p.tangent.z, across = dx * p.tangent.z - dz * p.tangent.x;
+        if (Math.abs(along) > length / 2 || Math.abs(across) > width / 2 + 0.8) return false;
+        const t = along / length + 0.5, side = THREE.MathUtils.clamp((width / 2 + 0.8 - Math.abs(across)) / 0.8, 0, 1);
+        const slope = height / length * t * (4 - 3 * t) * side;
+        result.height = track.height + rampHeight(along, length, height) * side;
+        result.normal.set(-p.tangent.x * slope, 1, -p.tangent.z * slope);
+        if (side < 1) {
+          const crossSlope = -Math.sign(across) * rampHeight(along, length, height) / 0.8;
+          result.normal.x -= p.tangent.z * crossSlope; result.normal.z += p.tangent.x * crossSlope;
+        }
+        result.normal.normalize(); return true;
+      },
       coversPoint(position, padding = 0) {
         const dx = position.x - p.position.x, dz = position.z - p.position.z;
         const along = dx * p.tangent.x + dz * p.tangent.z, across = dx * p.tangent.z - dz * p.tangent.x;

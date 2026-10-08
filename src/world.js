@@ -461,6 +461,11 @@ export class World {
     this.rainLines.frustumCulled = false;
     this.scene.add(this.rainLines);
   }
+  surfaceAt(position, result) {
+    result.height = this.groundDetails.groundHeight(position.x, position.z); result.normal.set(0, 1, 0);
+    for (const ramp of this.ramps) if (ramp.surfaceAt(position, result)) break;
+    return result;
+  }
   inPuddle(position, wetness) {
     const scale = smoothstep(0.12, 0.85, wetness);
     if (scale < 0.15) return false;
