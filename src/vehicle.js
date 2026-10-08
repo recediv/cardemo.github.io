@@ -2,6 +2,7 @@ import * as THREE from '../vendor/three.module.js';
 import { damp, RecoveryTimer } from './simulation.js';
 import { createRacingCar, RACING_COLLIDERS } from './car-model.js';
 import { HeadlightSystem } from './headlights.js';
+import { createRacingWheel } from './wheels.js';
 import { WORLD_SIZE } from './scene-config.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -100,15 +101,7 @@ export class Vehicle {
     return root;
   }
   createWheel() {
-    const root = new THREE.Group();
-    const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.32, 16), new THREE.MeshStandardMaterial({ color: '#1c2523', roughness: 0.94 }));
-    tire.rotation.z = Math.PI / 2;
-    tire.castShadow = true;
-    root.add(tire);
-    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.34, 8), new THREE.MeshStandardMaterial({ color: '#d6dec7', metalness: 0.6, roughness: 0.4 }));
-    hub.rotation.z = Math.PI / 2;
-    root.add(hub);
-    return root;
+    return createRacingWheel();
   }
   preStep(dt, input, environment) {
     for (const wheel of this.wheels) { wheel.previousPosition.copy(wheel.position); wheel.previousQuaternion.copy(wheel.quaternion); }
