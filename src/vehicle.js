@@ -5,6 +5,7 @@ import { HeadlightSystem } from './headlights.js';
 import { applyCarLighting } from './car-lighting.js';
 import { createRacingWheel } from './wheels.js';
 import { WheelSuspension } from './suspension.js';
+import { CarBodyPose } from './body-pose.js';
 import { WORLD_SIZE } from './scene-config.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -96,6 +97,7 @@ export class Vehicle {
       wheel.mesh.position.copy(wheel.position); wheel.mesh.quaternion.copy(wheel.quaternion);
     }
     this.suspension = new WheelSuspension(this); this.suspension.update();
+    this.bodyPose = new CarBodyPose(this);
   }
   createMesh() {
     const root = createRacingCar(CENTER_OF_MASS_OFFSET);
@@ -144,6 +146,7 @@ export class Vehicle {
     this.up.copy(UP).applyQuaternion(this.item.quaternion);
     const v = this.body.getLinearVelocity();
     this.speed = Math.hypot(v.x(), v.z());
+    this.bodyPose.update();
     const stable = this.up.y > 0.85 && this.item.position.y < 1.8 && this.surface.onRoad;
     if (stable) {
       this.lastSafe.position.copy(this.item.position).setY(1.1);
@@ -187,6 +190,7 @@ export class Vehicle {
     }
   }
   render(alpha, environment) {
+    this.bodyPose.render(alpha);
     for (const wheel of this.wheels) {
       wheel.mesh.position.lerpVectors(wheel.previousPosition, wheel.position, alpha);
       wheel.mesh.quaternion.slerpQuaternions(wheel.previousQuaternion, wheel.quaternion, alpha);
@@ -210,6 +214,7 @@ export class Vehicle {
     }
     this.physics.teleport(this.item, position, quaternion);
     this.controller.resetSuspension();
+    this.bodyPose.update();
     this.recovery.reset();
     this.airTime = 0;
     this.recoveries++;
@@ -220,6 +225,7 @@ export class Vehicle {
     const quaternion = new THREE.Quaternion().setFromAxisAngle(UP, this.track.spawn.yaw);
     this.physics.teleport(this.item, position, quaternion);
     this.controller.resetSuspension();
+    this.bodyPose.update();
     this.recovery.reset();
     this.airTime = 0;
     this.steer = 0;
@@ -233,6 +239,7 @@ export class Vehicle {
     const quaternion = this.item.quaternion.clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI));
     this.physics.teleport(this.item, position, quaternion);
     this.controller.resetSuspension();
+    this.bodyPose.update();
     this.recovery.reset();
     this.airTime = 0;
     this.notify('Flipped over. Recovery in 3 seconds');

@@ -133,3 +133,43 @@ test('Tinted windows remain opaque and their cached reflection shader follows th
   const frames = car.getObjectByName('window-gaskets'); assert.ok(frames);
   for (const attribute of Object.values(frames.geometry.attributes)) for (const value of attribute.array) assert.ok(Number.isFinite(value));
 });
+test('All four wheel openings have mirrored recessed interiors and retain paint below the popup headlight covers', () => {
+  const car = withCanvas(() => createRacingCar()), shell = car.getObjectByName('tapered-body'); car.updateMatrixWorld(true);
+  const ray = new THREE.Raycaster(), hits = [];
+  for (const z of [1, -1.04]) for (const y of [0.02, 0.06, 0.10]) {
+    const sides = [];
+    for (const side of [-1, 1]) {
+      ray.set(new THREE.Vector3(side * 2, y, z), new THREE.Vector3(-side, 0, 0));
+      hits.length = 0; ray.intersectObject(shell, false, hits);
+      assert.ok(hits.length, 'Wheel well needs an inner surface');
+      assert.equal(hits[0].face.materialIndex, 1, 'The side panel must be cut away, exposing the dark lining');
+      assert.ok(Math.abs(hits[0].point.x) < 0.61, 'The lining must sit inside the body');
+      sides.push(hits[0].point.x);
+    }
+    assert.ok(Math.abs(sides[0] + sides[1]) < 1e-6, 'Wheel openings must match on both sides');
+  }
+  for (const side of [-1, 1]) for (const z of [1.15, 1.3, 1.4]) {
+    ray.set(new THREE.Vector3(side * 0.585, 2, z), new THREE.Vector3(0, -1, 0));
+    hits.length = 0; ray.intersectObject(shell, false, hits);
+    assert.ok(hits.length && hits[0].face.materialIndex === 0, 'The headlight cover must keep its painted support');
+  }
+  const other = withCanvas(() => createRacingCar());
+  assert.equal(shell.geometry, other.getObjectByName('tapered-body').geometry, 'The cut shell must be cached');
+  for (const attribute of Object.values(shell.geometry.attributes)) for (const value of attribute.array) assert.ok(Number.isFinite(value));
+});
+
+test('Wheel arches have a circular edge and leave an unbroken painted shoulder above each tire', () => {
+  const car = withCanvas(() => createRacingCar()), shell = car.getObjectByName('tapered-body'); car.updateMatrixWorld(true);
+  const ray = new THREE.Raycaster();
+  for (const side of [-1, 1]) for (const centre of [1, -1.04]) {
+    for (const offset of [-0.30, -0.20, -0.10, 0, 0.10, 0.20, 0.30]) {
+      const z = centre + offset, edge = -0.30 + Math.sqrt(0.46 ** 2 - offset ** 2);
+      ray.set(new THREE.Vector3(side * 2, edge - 0.008, z), new THREE.Vector3(-side, 0, 0));
+      assert.equal(ray.intersectObject(shell)[0]?.face.materialIndex, 1, 'Round opening must expose its recessed lining');
+      ray.set(new THREE.Vector3(side * 2, edge + 0.008, z), new THREE.Vector3(-side, 0, 0));
+      assert.equal(ray.intersectObject(shell)[0]?.face.materialIndex, 0, 'Paint above the round edge must remain intact');
+    }
+    ray.set(new THREE.Vector3(side * 0.72, 2, centre), new THREE.Vector3(0, -1, 0));
+    assert.equal(ray.intersectObject(shell)[0]?.face.materialIndex, 0, 'The opening must not cut through the top of the fender');
+  }
+});

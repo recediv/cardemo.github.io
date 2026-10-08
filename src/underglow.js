@@ -3,7 +3,7 @@ import * as THREE from '../vendor/three.module.js';
 const NEON_COLOR = '#54d9ef';
 
 export function createUnderglowStrips(bodySections) {
-  const positions = [], indices = [], start = -1.35, end = 1.3;
+  const positions = [], indices = [], start = -0.511, end = 0.471;
   const stations = [start, ...bodySections.map(section => section[0]).filter(z => z > start && z < end), end];
   for (const side of [-1, 1]) {
     const first = positions.length / 3;

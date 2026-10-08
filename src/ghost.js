@@ -34,7 +34,7 @@ export class BestLapGhost {
     this.mesh = createGhostCar(vehicle.centerOfMassOffset ?? 0.18);
     this.wheels = vehicle.wheels.map(() => createGhostWheel());
     this.objects = [this.mesh, ...this.wheels];
-    this.physicalObjects = [vehicle.item, ...vehicle.wheels];
+    this.physicalObjects = [vehicle.bodyPose?.pose ?? vehicle.item, ...vehicle.wheels];
     this.group.add(...this.objects);
     const materials = new Map();
     this.group.traverse(object => {

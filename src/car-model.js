@@ -6,6 +6,7 @@ import { REAR_OPENINGS, createCarRear } from './car-rear.js';
 import { createCarExterior } from './car-body.js';
 import { createCarGlass, createWindowFrames, createCabinFrameGeometry, createCabinGlassGeometry } from './car-glass.js';
 import { createCarRoof } from './car-roof.js';
+import { createWheelWellGeometry } from './wheel-wells.js';
 
 export const POPUP_OPEN_ANGLE = -0.95;
 const POPUP_HEADLIGHT = { x: 0.415, z: 1.115, width: 0.35, length: 0.37, seam: 0.006 };
@@ -58,6 +59,15 @@ function loft(rings) {
 }
 
 let racingNumberTexture;
+let carBodyGeometry;
+
+function bodyGeometry(simplified) {
+  if (!simplified && carBodyGeometry) return carBodyGeometry;
+  const shell = simplified ? loft(bodyRings) : createBodyShellGeometry(bodyRings, FRONT_OPENINGS, REAR_OPENINGS);
+  const geometry = createWheelWellGeometry(shell, bodyRings, simplified);
+  if (!simplified) carBodyGeometry = geometry;
+  return geometry;
+}
 
 function numberTexture() {
   if (racingNumberTexture) return racingNumberTexture;
@@ -105,7 +115,7 @@ export function createRacingCar(centerOfMassOffset = 0, { simplified = false } =
   const box = (size, position, material, name) => {
     const item = mesh(new THREE.BoxGeometry(...size), material, name); item.position.set(...position); return item;
   };
-  mesh(simplified ? loft(bodyRings) : createBodyShellGeometry(bodyRings, FRONT_OPENINGS, REAR_OPENINGS), simplified ? paint : [paint, trim], 'tapered-body');
+  mesh(bodyGeometry(simplified), simplified ? paint : [paint, trim], 'tapered-body');
   mesh(createCabinGlassGeometry(cabinRings), glass, 'sloping-windows');
   if (!simplified) {
     mesh(createCabinFrameGeometry(cabinRings), paint, 'cabin-frame');

@@ -188,7 +188,7 @@ export class GroundDetails {
         x = (this.random() - 0.5) * (WORLD_SIZE.width - 6); z = (this.random() - 0.5) * (WORLD_SIZE.depth - 6);
       }
       const floor = this.groundHeight(x, z) + 0.018;
-      this.leaves.push({ position: new THREE.Vector3(x, floor, z), floor, velocity: new THREE.Vector3(), scale: 0.28 + this.random() * 0.24, yaw: this.random() * Math.PI * 2, phase: this.random() * Math.PI * 2, weight: 0.1 + this.random() * 0.1, tilt: (this.random() - 0.5) * 0.035, lastPush: -2, windAfter: this.random() * 3, cell: null });
+      this.leaves.push({ position: new THREE.Vector3(x, floor, z), floor, velocity: new THREE.Vector3(), scale: 0.28 + this.random() * 0.24, yaw: this.random() * Math.PI * 2, phase: this.random() * Math.PI * 2, weight: 0.1 + this.random() * 0.1, tilt: (this.random() - 0.5) * 0.035, lastPush: -2, pushStrength: 0, pushLift: 0, pushForward: 0, windAfter: this.random() * 3, cell: null });
       const shade = this.random() * colors.length;
       this.mesh.setColorAt(i, color.copy(colors[Math.floor(shade)]).multiplyScalar(0.92 + (shade % 1) * 0.16));
       this.writeMatrix(i); this.putToRest(i);
@@ -206,25 +206,42 @@ export class GroundDetails {
   pushFromVehicle(position, velocity) {
     const speed = Math.hypot(velocity.x, velocity.z);
     const previous = this.previousVehicle && this.previousVehicle.distanceToSquared(position) < 144 ? this.previousVehicle : position;
-    if (speed > 0.35 && position.y < 2) {
+    // Slow driving does not create a visible leaf wake.
+    // Blend it in above roughly 20 km/h instead of switching the kick on.
+    const wake = smoothstep(6, 12, speed);
+    if (wake > 0 && position.y < 2) {
       const radius = 3.2, seen = new Set();
       const minX = Math.floor((Math.min(previous.x, position.x) - radius) / this.cellSize), maxX = Math.floor((Math.max(previous.x, position.x) + radius) / this.cellSize);
       const minZ = Math.floor((Math.min(previous.z, position.z) - radius) / this.cellSize), maxZ = Math.floor((Math.max(previous.z, position.z) + radius) / this.cellSize);
       const dx = position.x - previous.x, dz = position.z - previous.z, lengthSq = dx * dx + dz * dz;
       for (let z = minZ; z <= maxZ; z++) for (let x = minX; x <= maxX; x++) for (const index of this.buckets.get(`${x},${z}`) ?? []) {
         if (seen.has(index)) continue; seen.add(index);
-        const leaf = this.leaves[index]; if (this.elapsed - leaf.lastPush < 0.45 || leaf.position.y - this.groundHeight(leaf.position.x, leaf.position.z) > 1.4) continue;
+        const leaf = this.leaves[index]; if (leaf.position.y - this.groundHeight(leaf.position.x, leaf.position.z) > 1.4) continue;
         const t = lengthSq > 1e-6 ? clamp(((leaf.position.x - previous.x) * dx + (leaf.position.z - previous.z) * dz) / lengthSq) : 1;
         const sideX = leaf.position.x - previous.x - dx * t, sideZ = leaf.position.z - previous.z - dz * t, distance = Math.hypot(sideX, sideZ);
-        const influence = 1 - smoothstep(0.4, radius, distance); if (influence <= 0) continue;
-        const push = (2.0 + Math.min(speed, 28) * 0.48) * influence;
+        const influence = (1 - smoothstep(0.4, radius, distance)) * wake; if (influence <= 0) continue;
+        const push = (2.0 + Math.min(speed, 44) * 0.48) * influence;
+        const samePass = this.elapsed - leaf.lastPush < 0.45;
+        // A fast car reaches the leaf during the edge contact's cooldown.
+        // Add only the stronger part of the wake as it gets closer.
+        if (samePass && push <= leaf.pushStrength + 0.0001) continue;
+        const lift = (1.2 + Math.min(speed * 0.12, 3.2)) * influence;
+        const forward = speed * 0.18 * influence;
+        const extraPush = samePass ? push - leaf.pushStrength : push;
+        const extraLift = samePass ? Math.max(0, lift - leaf.pushLift) : lift;
+        const extraForward = samePass ? Math.max(0, forward - leaf.pushForward) : forward;
         // Leaves directly under the car's centre still receive a sideways kick,
         // so they emerge beside the wheels instead of hiding under the chassis.
         const sideLength = Math.max(0.001, distance), sign = index % 2 ? 1 : -1;
         const outwardX = distance > 0.15 ? sideX / sideLength : -velocity.z / speed * sign;
         const outwardZ = distance > 0.15 ? sideZ / sideLength : velocity.x / speed * sign;
-        leaf.velocity.set(outwardX * push + velocity.x * 0.18 * influence, (1.2 + Math.min(speed * 0.12, 2.4)) * influence, outwardZ * push + velocity.z * 0.18 * influence);
-        leaf.lastPush = this.elapsed; this.active.add(index); this.windActive.delete(index); this.scatterCount++;
+        if (!samePass) leaf.velocity.set(0, 0, 0);
+        leaf.velocity.x += outwardX * extraPush + velocity.x / speed * extraForward;
+        leaf.velocity.y += extraLift;
+        leaf.velocity.z += outwardZ * extraPush + velocity.z / speed * extraForward;
+        leaf.pushStrength = push; leaf.pushLift = lift; leaf.pushForward = forward;
+        if (!samePass) { leaf.lastPush = this.elapsed; this.scatterCount++; }
+        this.active.add(index); this.windActive.delete(index);
       }
     }
     if (!this.previousVehicle) this.previousVehicle = position.clone(); else this.previousVehicle.copy(position);
