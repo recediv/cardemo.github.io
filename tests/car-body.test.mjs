@@ -59,6 +59,29 @@ test('Door outlines reach the roof, with separate door and quarter windows fitte
   }
 });
 
+test('The roof is crowned across its width and its stripes follow the curved surface', () => {
+  const car = withCanvas(() => createRacingCar()), roof = car.getObjectByName('low-roof');
+  car.updateMatrixWorld(true); roof.geometry.computeBoundingBox();
+  const bounds = roof.geometry.boundingBox, middle = (bounds.min.z + bounds.max.z) / 2, ray = new THREE.Raycaster();
+  const topAt = (x, z) => {
+    ray.set(new THREE.Vector3(x, 2, z), new THREE.Vector3(0, -1, 0));
+    return ray.intersectObject(roof)[0]?.point.y;
+  };
+  for (const x of [-0.48, 0.48]) assert.ok(topAt(0, middle) > topAt(x, middle) + 0.008);
+  for (const stripe of car.children.filter(part => part.name === 'roof-stripe')) {
+    const positions = stripe.geometry.attributes.position;
+    for (let i = 0; i < positions.count; i++) {
+      const x = positions.getX(i), y = positions.getY(i), z = positions.getZ(i);
+      if (z <= bounds.min.z + 1e-4 || z >= bounds.max.z - 1e-4) continue;
+      const separation = y - topAt(x, z);
+      assert.ok(separation > 0.0005 && separation < 0.004, 'Stripes must not intersect or float above the roof');
+    }
+  }
+  const other = withCanvas(() => createRacingCar());
+  assert.equal(roof.geometry, other.getObjectByName('low-roof').geometry);
+  for (const attribute of Object.values(roof.geometry.attributes)) for (const value of attribute.array) assert.ok(Number.isFinite(value));
+});
+
 test('Axles, wishbones and dampers stay attached to the hubs through steering, wheel spin and suspension travel', () => {
   const scene = new THREE.Scene(), mesh = withCanvas(() => createRacingCar(0.18)); scene.add(mesh);
   const vehicle = { mesh, centerOfMassOffset: 0.18, wheels: Array.from({ length: 4 }, () => ({ mesh: createRacingWheel() })) };

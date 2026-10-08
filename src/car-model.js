@@ -5,6 +5,7 @@ import { FRONT_OPENINGS, createCarFront } from './car-front.js';
 import { REAR_OPENINGS, createCarRear } from './car-rear.js';
 import { createCarExterior } from './car-body.js';
 import { createCarGlass, createWindowFrames, createCabinFrameGeometry, createCabinGlassGeometry } from './car-glass.js';
+import { createCarRoof } from './car-roof.js';
 
 export const POPUP_OPEN_ANGLE = -0.95;
 const POPUP_HEADLIGHT = { x: 0.415, z: 1.115, width: 0.35, length: 0.37, seam: 0.006 };
@@ -110,7 +111,8 @@ export function createRacingCar(centerOfMassOffset = 0, { simplified = false } =
     mesh(createCabinFrameGeometry(cabinRings), paint, 'cabin-frame');
     mesh(createWindowFrames(cabinRings), trim, 'window-gaskets').castShadow = false;
   }
-  box([1.13, 0.045, 0.83], [0, 0.735, -0.27], paint, 'low-roof').rotation.x = 0.026;
+  const roof = createCarRoof(cabinRings, simplified);
+  mesh(roof.roof, paint, 'low-roof');
   box([1.78, 0.075, 0.28], [0, 0.65, -1.35], trim, 'rear-wing');
   for (const side of [-1, 1]) {
     if (!simplified) {
@@ -138,7 +140,7 @@ export function createRacingCar(centerOfMassOffset = 0, { simplified = false } =
     }
     const stripe = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
     stripe.computeVertexNormals(); mesh(stripe, stripePaint, 'racing-stripe').castShadow = false;
-    box([0.17, 0.006, 0.8], [side * 0.22, 0.764, -0.27], simplified ? stripePaint : white, 'roof-stripe').rotation.x = 0.026;
+    mesh(roof.stripes[side < 0 ? 0 : 1], stripePaint, 'roof-stripe').castShadow = false;
     if (!simplified) {
       const vent = box([0.13, 0.009, 0.29], [side * 0.49, bodyTop(0.87) + 0.004, 0.87], trim, 'bonnet-vent'); vent.rotation.x = 0.14;
     }
